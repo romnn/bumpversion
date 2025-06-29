@@ -179,7 +179,10 @@ impl Modification {
             None
         } else {
             let (label_before, label_after) = if let Some(path) = path {
-                (format!("{path:?} (before)"), format!("{path:?} (after)"))
+                (
+                    format!("{} (before)", path.display()),
+                    format!("{} (after)", path.display()),
+                )
             } else {
                 ("before".to_string(), "after".to_string())
             };
@@ -284,7 +287,7 @@ impl IoError {
 impl std::fmt::Display for IoError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.path {
-            Some(path) => write!(f, "io error for {path:?}"),
+            Some(path) => write!(f, "io error for {}", path.display()),
             None => write!(f, "io error"),
         }
     }
