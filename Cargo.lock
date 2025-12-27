@@ -233,7 +233,7 @@ checksum = "5dd9dc738b7a8311c7ade152424974d8115f2cdad61e8dab8dac9f2362298510"
 
 [[package]]
 name = "bumpversion"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "async-process",
  "chrono",
@@ -263,7 +263,7 @@ dependencies = [
 
 [[package]]
 name = "bumpversion-cli"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "bumpversion",
  "clap",
@@ -910,9 +910,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.103"
+version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ee95bc4ef87b8d5ba32e8b7714ccc834865276eab0aed5c9958d00ec45f49e8"
+checksum = "9695f8df41bb4f3d222c95a67532365f569318332d03d5f3f67f37b20e6ebdf0"
 dependencies = [
  "unicode-ident",
 ]
