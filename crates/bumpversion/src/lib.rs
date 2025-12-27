@@ -109,7 +109,8 @@ pub async fn find_config<W>(
     printer: &diagnostics::Printer<W>,
 ) -> Result<Option<(config::ConfigFile, config::FinalizedConfig)>, config::Error>
 where
-    W: codespan_reporting::term::termcolor::WriteColor + Send + Sync + 'static,
+    W: codespan_reporting::term::WriteStyle + Send + Sync + 'static,
+    // W: codespan_reporting::term::termcolor::WriteColor + Send + Sync + 'static,
 {
     use diagnostics::ToDiagnostics;
     let config_files = config::config_file_locations(dir);
@@ -207,7 +208,7 @@ where
         .map(|(config_file, mut config, diagnostics)| {
             use crate::config::MergeWith;
 
-            // emit diagnostics
+            // Emit diagnostics
             for diagnostic in &diagnostics {
                 printer.emit(diagnostic).map_err(diagnostics::Error::from)?;
             }

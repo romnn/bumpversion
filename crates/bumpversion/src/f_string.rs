@@ -151,7 +151,7 @@ pub mod parser {
     /// let parts = parse_format_arguments("v{major}.{minor}.{patch}")?;
     /// # Ok::<(), bumpversion::f_string::ParseError>(())
     /// ```
-    pub fn parse_format_arguments(value: &str) -> Result<Vec<Value>, ParseError> {
+    pub fn parse_format_arguments(value: &str) -> Result<Vec<Value<'_>>, ParseError> {
         let test = repeat(0.., text_or_argument)
             .parse(value)
             .map_err(|_| ParseError {

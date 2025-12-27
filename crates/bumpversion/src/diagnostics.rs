@@ -5,6 +5,7 @@ use codespan_reporting::{
 };
 use parking_lot::{Mutex, RwLock};
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 
 /// Identifier for a source file in the diagnostics registry.
 pub type FileId = usize;
@@ -247,7 +248,7 @@ impl ToSourceName for PathBuf {
     }
 }
 
-impl Default for Printer<term::termcolor::StandardStream> {
+impl Default for Printer<term::StylesWriter<'static, term::termcolor::StandardStream>> {
     fn default() -> Self {
         Self::stderr(None)
     }
@@ -259,14 +260,13 @@ impl Default for Printer<term::termcolor::Buffer> {
     }
 }
 
+static DEFAULT_STYLES: LazyLock<term::Styles> = LazyLock::new(|| term::Styles::default());
+
 impl Printer<term::termcolor::Buffer> {
     #[must_use]
     pub fn buffered() -> Self {
         let writer = term::termcolor::Buffer::ansi();
-        let diagnostic_config = term::Config {
-            styles: term::Styles::with_blue(term::termcolor::Color::Blue),
-            ..term::Config::default()
-        };
+        let diagnostic_config = term::Config::default();
         Self {
             writer: Mutex::new(writer),
             diagnostic_config,
@@ -286,16 +286,14 @@ impl Printer<term::termcolor::Buffer> {
     }
 }
 
-impl Printer<term::termcolor::StandardStream> {
+impl Printer<term::StylesWriter<'static, term::termcolor::StandardStream>> {
     #[must_use]
     pub fn stderr(color_choice: Option<term::termcolor::ColorChoice>) -> Self {
         let color_choice = color_choice.unwrap_or(term::termcolor::ColorChoice::Auto);
         let writer = term::termcolor::StandardStream::stderr(color_choice);
+        let writer = term::StylesWriter::new(writer, &DEFAULT_STYLES);
 
-        let diagnostic_config = term::Config {
-            styles: term::Styles::with_blue(term::termcolor::Color::Blue),
-            ..term::Config::default()
-        };
+        let diagnostic_config = term::Config::default();
         Self {
             writer: Mutex::new(writer),
             diagnostic_config,
@@ -329,11 +327,12 @@ impl<W> Printer<W> {
 
 impl<W> Printer<W>
 where
-    W: term::termcolor::WriteColor,
+    W: term::WriteStyle,
 {
     pub fn emit(&self, diagnostic: &Diagnostic<usize>) -> Result<(), files::Error> {
-        term::emit(
-            &mut *self.writer.lock(),
+        let mut writer = self.writer.lock();
+        term::emit_to_write_style(
+            &mut *writer,
             &self.diagnostic_config,
             &*self.files.read(),
             diagnostic,

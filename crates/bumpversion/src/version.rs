@@ -426,7 +426,7 @@ impl Version {
 
     /// Iterate over the version components in order.
     #[must_use]
-    pub fn iter(&self) -> indexmap::map::Iter<String, Component> {
+    pub fn iter(&self) -> indexmap::map::Iter<'_, String, Component> {
         self.components.iter()
     }
 
