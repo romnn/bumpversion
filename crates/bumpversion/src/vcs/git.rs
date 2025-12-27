@@ -245,14 +245,13 @@ impl GitRepository {
                 }))
             }
             Err(err) => {
-                if let crate::command::Error::Failed { ref output, .. } = err {
-                    if output
+                if let crate::command::Error::Failed { ref output, .. } = err
+                    && output
                         .stderr
                         .contains("No names found, cannot describe anything")
                     {
                         return Ok(None);
                     }
-                }
                 Err(err.into())
             }
         }

@@ -64,7 +64,7 @@ where
     V: AsRef<str> + std::fmt::Debug,
     S: std::hash::BuildHasher,
 {
-    let mut after = before.to_string();
+    let mut after = before.clone();
     let mut replacements = vec![];
     for change in changes {
         tracing::debug!(

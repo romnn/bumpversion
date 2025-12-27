@@ -71,13 +71,11 @@ pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
     // if both versions are present, they should match
     if let Some((configured_version, actual_version)) =
         configured_version.as_ref().zip(actual_version.as_ref())
-    {
-        if configured_version != actual_version {
+        && configured_version != actual_version {
             tracing::warn!(
                 "version {configured_version} from config does not match last tagged version ({actual_version})",
             );
         }
-    }
 
     check_is_dirty(&repo, &config).await?;
 

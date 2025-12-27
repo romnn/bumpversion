@@ -57,7 +57,7 @@ impl Value {
 impl<'a> From<parser::Value<'a>> for Value {
     fn from(value: parser::Value<'a>) -> Self {
         match value {
-            parser::Value::String(s) => Self::String(s.to_string()),
+            parser::Value::String(s) => Self::String(s.clone()),
             parser::Value::Argument(s) => Self::Argument(s.to_string()),
         }
     }
@@ -358,7 +358,7 @@ impl PythonFormatString {
 
                     match value {
                         Some(value) => Ok(value),
-                        None if strict => Err(MissingArgumentError(arg.to_string())),
+                        None if strict => Err(MissingArgumentError(arg.clone())),
                         None => Ok(String::new()),
                     }
                 }

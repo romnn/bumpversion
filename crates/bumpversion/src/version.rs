@@ -625,7 +625,7 @@ impl VersionSpec {
             .map(|(comp_name, comp_config)| {
                 let comp_value = raw_components.get(comp_name.as_str()).copied();
                 let component = Component::new(comp_value, comp_config.clone());
-                (comp_name.to_string(), component)
+                (comp_name.clone(), component)
             })
             .collect();
         Version {

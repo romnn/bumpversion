@@ -169,8 +169,8 @@ where
         replacements: vec![files::Replacement {
             search_pattern: search_pattern.to_string(),
             search: search_regex.as_str().to_string(),
-            replace_pattern: replace_pattern.to_string(),
-            replace: replacement.to_string(),
+            replace_pattern: replace_pattern.clone(),
+            replace: replacement.clone(),
         }],
     };
     Ok(Some(modification))

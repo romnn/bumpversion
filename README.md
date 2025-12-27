@@ -22,13 +22,13 @@ This is an improved version of the popular [callowayproject/bump-my-version](htt
 
 ```bash
 # will install `bumpversion` binary
-brew install romnn/tap/bumpversion
+brew install --cask romnn/tap/bumpversion
 
-# will install `cargo-bumpversion` binary
-brew install romnn/tap/cargo-bumpversion
+# will install `cargo-bumpversion` binary (to be used as `cargo bumpversion` subcommand)
+brew install --cask romnn/tap/cargo-bumpversion
 
 # or install from source (will install both `cargo-bumpversion` and `bumpversion` binaries)
-cargo install bumpversion-cli
+cargo install --locked bumpversion-cli
 ```
 
 ### CLI usage

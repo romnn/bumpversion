@@ -129,7 +129,7 @@ where
                 .map_err(|source| IoError::new(source, &path))
                 .map_err(config::Error::from)?;
 
-            let file_id = printer.add_source_file(&path, config.to_string());
+            let file_id = printer.add_source_file(&path, config.clone());
 
             let parse_config_task = tokio::task::spawn_blocking(move || {
                 let mut diagnostics = vec![];

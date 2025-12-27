@@ -8,12 +8,12 @@ before:
     - rustup default stable
     - cargo install --locked --force cargo-zigbuild
 
-brews:
-  - name: cargo-bumpversion
+homebrew_casks:
+  - name: &cargo-bumpversion cargo-bumpversion
     ids:
       - cargo-bumpversion
     description: "Plugin for `cargo` to update all version strings in your project and optionally commit and tag the changes"
-    directory: Formula
+    directory: Casks
     commit_author:
       name: romnn
       email: contact@romnn.com
@@ -24,11 +24,17 @@ brews:
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
       pull_request:
         enabled: false
-  - name: bumpversion
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/cargo-bumpversion"]
+          end
+  - name: &bumpversion bumpversion
     ids:
       - bumpversion
     description: "Update all version strings in your project and optionally commit and tag the changes"
-    directory: Formula
+    directory: Casks
     commit_author:
       name: romnn
       email: contact@romnn.com
@@ -39,10 +45,15 @@ brews:
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
       pull_request:
         enabled: false
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/bumpversion"]
+          end
 
 builds:
-  # cargo-bumpversion binary
-  - id: "cargo-bumpversion"
+  - id: *cargo-bumpversion
     builder: rust
     binary: cargo-bumpversion
     targets:
@@ -60,8 +71,7 @@ builds:
       - "--bin=cargo-bumpversion"
       - "--target-dir=./target" # TODO: can we remove this once rust support is better?
 
-  # bumpversion binary
-  - id: "bumpversion"
+  - id: *bumpversion
     builder: rust
     binary: bumpversion
     targets:
@@ -80,7 +90,7 @@ builds:
       - "--target-dir=./target" # TODO: can we remove this once rust support is better?
 
 archives:
-  - id: cargo-bumpversion
+  - id: *cargo-bumpversion
     formats: ["tar.gz"]
     name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     ids:
@@ -90,7 +100,7 @@ archives:
     format_overrides:
       - goos: windows
         formats: ["zip"]
-  - id: bumpversion
+  - id: *bumpversion
     formats: ["tar.gz"]
     name_template: "{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     ids:
