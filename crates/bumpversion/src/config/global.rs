@@ -2,6 +2,7 @@ use super::regex::{Regex, RegexTemplate};
 use crate::f_string::PythonFormatString;
 use std::path::PathBuf;
 
+/// Global configuration options as parsed from configuration sources.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GlobalConfig {
     /// Don't abort if working directory is dirty
@@ -58,6 +59,7 @@ pub struct GlobalConfig {
     pub additional_files: Option<Vec<PathBuf>>,
 }
 
+/// Global configuration with defaults applied.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct GlobalConfigFinalized {
@@ -118,6 +120,7 @@ pub struct GlobalConfigFinalized {
 
 impl GlobalConfig {
     #[must_use]
+    /// Create an empty [`GlobalConfig`] with all options unset.
     pub fn empty() -> Self {
         Self {
             allow_dirty: None,

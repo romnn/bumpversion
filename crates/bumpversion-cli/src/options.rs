@@ -34,18 +34,6 @@ pub enum SubCommand {
     Bump(BumpOptions),
 }
 
-impl SubCommand {
-    pub fn as_bump_component(&self) -> Option<&str> {
-        match self {
-            SubCommand::Major => Some("major"),
-            SubCommand::Minor => Some("minor"),
-            SubCommand::Patch => Some("patch"),
-            SubCommand::Bump(opts) => Some(&opts.component),
-            _ => None,
-        }
-    }
-}
-
 #[derive(clap::Args, Debug, Clone)]
 pub struct ShowOptions {
     #[arg(help = "The variables or configuration settings to show")]

@@ -10,7 +10,9 @@ use std::collections::HashMap;
 /// `Value::String` holds literal content, while `Value::Argument` represents `{name}`.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Value {
+    /// Literal string content.
     String(String),
+    /// Placeholder argument name.
     Argument(String),
 }
 
@@ -74,8 +76,11 @@ pub mod parser {
     use winnow::token::take_while;
 
     #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    /// Parsed format string segment.
     pub enum Value<'a> {
+        /// Literal string content.
         String(String),
+        /// Placeholder argument name.
         Argument(&'a str),
     }
 
@@ -126,7 +131,9 @@ pub mod parser {
 
     #[derive(thiserror::Error, Debug, PartialEq, Eq)]
     #[error("invalid format: {format_string:?}")]
+    /// Parser error for invalid Python-style format strings.
     pub struct ParseError {
+        /// The input string that failed to parse.
         pub format_string: String,
     }
 
@@ -279,6 +286,9 @@ pub mod parser {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// A parsed Python-style format string.
+///
+/// Stores literal and placeholder segments and can be formatted using a map of values.
 pub struct PythonFormatString(pub Vec<Value>);
 
 impl std::fmt::Display for PythonFormatString {
@@ -328,14 +338,19 @@ impl std::str::FromStr for PythonFormatString {
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq, PartialOrd, Hash)]
 #[error("missing argument {0:?}")]
+/// Error returned when a required placeholder is missing during formatting.
 pub struct MissingArgumentError(String);
 
 impl PythonFormatString {
+    /// Parse a Python-style format string.
     pub fn parse(value: &str) -> Result<Self, parser::ParseError> {
         let arguments = parser::parse_format_arguments(value)?;
         Ok(Self(arguments.into_iter().map(Into::into).collect()))
     }
 
+    /// Format this string with the given `values`.
+    ///
+    /// If `strict` is `true`, missing placeholders result in an error.
     pub fn format<K, V>(
         &self,
         values: &HashMap<K, V>,
@@ -377,10 +392,12 @@ impl PythonFormatString {
         })
     }
 
+    /// Iterate over all placeholder argument names in this format string.
     pub fn named_arguments(&self) -> impl Iterator<Item = &str> {
         self.0.iter().filter_map(|value| value.as_argument())
     }
 
+    /// Iterate over the parsed [`Value`] segments.
     pub fn iter(&self) -> std::slice::Iter<'_, Value> {
         self.0.iter()
     }

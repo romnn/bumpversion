@@ -56,6 +56,7 @@ pub mod values {
     /// Function for bumping values version components.
     #[derive(Debug)]
     pub struct ValuesFunction<'a> {
+        /// Ordered list of allowed values for this component.
         pub values: &'a [String],
     }
 
@@ -94,9 +95,15 @@ pub mod numeric {
     /// Captures named groups: `prefix`, `number`, and `suffix`.
     pub static FIRST_NUMERIC_REGEX: std::sync::LazyLock<regex::Regex> =
         std::sync::LazyLock::new(|| {
-            regex::RegexBuilder::new(r"(?P<prefix>[^-0-9]*)(?P<number>-?\d+)(?P<suffix>.*)")
-                .build()
-                .unwrap()
+            #[expect(
+                clippy::expect_used,
+                reason = "static regex is a compile-time literal and known to be valid"
+            )]
+            let regex =
+                regex::RegexBuilder::new(r"(?P<prefix>[^-0-9]*)(?P<number>-?\d+)(?P<suffix>.*)")
+                    .build()
+                    .expect("static numeric parsing regex must be valid");
+            regex
         });
 
     /// Errors encountered when extracting or bumping numeric components.
@@ -329,7 +336,7 @@ impl Component {
 
         if spec.first_value.is_none() {
             if !spec.values.is_empty() {
-                spec.first_value = Some(spec.values[0].clone());
+                spec.first_value = spec.values.first().cloned();
             } else if spec.calver_format.is_none() {
                 spec.first_value = Some("0".to_string());
             }
@@ -337,7 +344,7 @@ impl Component {
 
         if spec.optional_value.is_none() {
             if !spec.values.is_empty() {
-                spec.optional_value = Some(spec.values[0].clone());
+                spec.optional_value = spec.values.first().cloned();
             } else if spec.calver_format.is_none() {
                 spec.optional_value = spec.first_value.clone();
             }
@@ -391,11 +398,18 @@ impl Component {
             func.bump(value)?
         } else {
             let func = values::ValuesFunction::new(self.spec.values.as_slice());
+
+            let Some(first_value) = self.spec.values.first() else {
+                return Err(BumpError::Values(values::Error::MaxReached {
+                    allowed: self.spec.values.clone(),
+                }));
+            };
+
             let value = self
                 .value
                 .as_deref()
                 .or(self.spec.optional_value.as_deref())
-                .unwrap_or(self.spec.values[0].as_str());
+                .unwrap_or(first_value.as_str());
             func.bump(value).map(ToString::to_string)?
         };
         Ok(Self {
@@ -521,7 +535,11 @@ impl Version {
             .components_to_always_increment
             .iter()
             .map(|comp_name| {
-                self.components[comp_name]
+                let component = self
+                    .components
+                    .get(comp_name)
+                    .ok_or_else(|| BumpError::InvalidComponent(comp_name.clone()))?;
+                component
                     .bump()
                     .map(|bumped_comp| (comp_name.as_str(), bumped_comp))
             })
@@ -534,7 +552,11 @@ impl Version {
         let values = self.increment_always_incr()?;
         let mut dependents = self.always_incr_dependencies();
         for (comp_name, value) in &values {
-            if value == &self.components[*comp_name] {
+            if self
+                .components
+                .get(*comp_name)
+                .is_some_and(|current_value| value == current_value)
+            {
                 dependents.remove(comp_name);
             }
         }
@@ -562,7 +584,12 @@ impl Version {
 
         let should_reset = components_to_reset.contains(component);
         if !should_reset {
-            new_components.insert(component.to_string(), self.components[component].bump()?);
+            let bumped = self
+                .components
+                .get(component)
+                .ok_or_else(|| BumpError::InvalidComponent(component.to_string()))?
+                .bump()?;
+            new_components.insert(component.to_string(), bumped);
             let dependants = self.spec.dependents(component);
             components_to_reset.extend(dependants);
         }
@@ -572,9 +599,20 @@ impl Version {
         for comp_name in components_to_reset {
             // dbg!(&comp_name);
             // dbg!(&self.components);
-            let is_independent = self.components[comp_name].spec.independent == Some(true);
+            let is_independent = self
+                .components
+                .get(comp_name)
+                .ok_or_else(|| BumpError::InvalidComponent(comp_name.to_string()))?
+                .spec
+                .independent
+                == Some(true);
             if !is_independent {
-                new_components.insert(comp_name.to_string(), self.components[comp_name].first());
+                let first = self
+                    .components
+                    .get(comp_name)
+                    .ok_or_else(|| BumpError::InvalidComponent(comp_name.to_string()))?
+                    .first();
+                new_components.insert(comp_name.to_string(), first);
                 // *new_components.entry(comp_name.to_string()).or_default() =
                 //     self.components[comp_name].first();
             }
@@ -865,7 +903,7 @@ mod tests {
         let mut diagnostics = vec![];
 
         let config = config::Config::from_pyproject_toml(toml, file_id, strict, &mut diagnostics)?
-            .expect("config should be present")
+            .ok_or_else(|| eyre::eyre!("expected config to be present"))?
             .finalize();
 
         let components = config::version::version_component_configs(&config);
@@ -876,7 +914,7 @@ mod tests {
             &config.global.parse_version_pattern,
             &version_spec,
         )
-        .expect("current version should parse");
+        .ok_or_else(|| eyre::eyre!("expected current version to parse"))?;
 
         let new_version = current_version.bump("minor")?;
         let ctx = HashMap::<String, String>::new();
@@ -899,9 +937,9 @@ mod tests {
         ];
         let func = super::values::ValuesFunction::new(&values);
 
-        sim_assert_eq!(func.bump("alpha").unwrap(), "beta");
-        sim_assert_eq!(func.bump("beta").unwrap(), "rc");
-        sim_assert_eq!(func.bump("rc").unwrap(), "final");
+        sim_assert_eq!(func.bump("alpha")?, "beta");
+        sim_assert_eq!(func.bump("beta")?, "rc");
+        sim_assert_eq!(func.bump("rc")?, "final");
         assert!(func.bump("final").is_err());
         assert!(func.bump("invalid").is_err());
 

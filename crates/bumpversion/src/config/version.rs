@@ -1,5 +1,6 @@
 use indexmap::IndexMap;
 
+/// Mapping from component name to its [`VersionComponentSpec`].
 pub type VersionComponentConfigs = IndexMap<String, VersionComponentSpec>;
 
 /// Configuration of a version component.

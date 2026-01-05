@@ -12,45 +12,75 @@ use std::path::PathBuf;
 use toml_span as toml;
 
 #[derive(thiserror::Error, Debug)]
+/// Errors that can occur while parsing `pyproject.toml` bumpversion configuration.
 pub enum ParseError {
     #[error("{message}")]
-    InvalidConfiguration { message: String, span: Span },
+    /// The configuration is structurally invalid.
+    InvalidConfiguration {
+        /// Human-friendly error message.
+        message: String,
+        /// Source span of the offending value.
+        span: Span,
+    },
     #[error("{message}")]
+    /// A required key is missing.
     MissingKey {
+        /// The missing key name.
         key: String,
+        /// Human-friendly error message.
         message: String,
+        /// Source span of the relevant value.
         span: Span,
     },
     #[error("{message}")]
+    /// None of the required keys were present.
     MissingOneOf {
+        /// Candidate key names.
         keys: Vec<String>,
+        /// Human-friendly error message.
         message: String,
+        /// Source span of the relevant value.
         span: Span,
     },
     #[error("{message}")]
+    /// A value had an unexpected type.
     UnexpectedType {
+        /// Human-friendly error message.
         message: String,
+        /// Expected value kinds.
         expected: Vec<ValueKind>,
+        /// Actual value kind.
         found: ValueKind,
+        /// Source span of the offending value.
         span: Span,
     },
     #[error("{message}")]
+    /// A format string could not be parsed.
     InvalidFormatString {
         #[source]
+        /// Underlying parse error.
         source: crate::f_string::ParseError,
+        /// Human-friendly error message.
         message: String,
+        /// Source span of the offending value.
         span: Span,
     },
     #[error("{message}")]
+    /// A regex string could not be compiled.
     InvalidRegex {
         #[source]
+        /// Underlying regex error.
         source: regex::Error,
+        /// Human-friendly error message.
         message: String,
+        /// Source span of the offending value.
         span: Span,
     },
     #[error("{source}")]
+    /// TOML parse error.
     Toml {
         #[source]
+        /// Underlying TOML parse error.
         source: toml_span::Error,
     },
 }
@@ -157,12 +187,19 @@ mod diagnostics {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// Coarse kind of a TOML value used for diagnostics.
 pub enum ValueKind {
+    /// String value.
     String,
+    /// Integer value.
     Integer,
+    /// Float value.
     Float,
+    /// Boolean value.
     Boolean,
+    /// Array value.
     Array,
+    /// Table value.
     Table,
 }
 
@@ -187,6 +224,7 @@ impl<'de> From<&toml_span::value::ValueInner<'de>> for ValueKind {
 }
 
 #[inline]
+/// Parse a string array from a value.
 pub fn as_string_array<'de>(value: &'de toml::Value<'de>) -> Result<Vec<String>, ParseError> {
     Ok(as_str_array(value)?
         .into_iter()
@@ -196,6 +234,7 @@ pub fn as_string_array<'de>(value: &'de toml::Value<'de>) -> Result<Vec<String>,
 
 #[inline]
 #[must_use]
+/// Treat non-arrays as a single-element array.
 pub fn as_array<'de>(value: &'de toml::Value<'de>) -> Vec<&'de toml::Value<'de>> {
     match value.as_ref() {
         toml::value::ValueInner::Array(array) => array.iter().collect(),
@@ -204,6 +243,7 @@ pub fn as_array<'de>(value: &'de toml::Value<'de>) -> Vec<&'de toml::Value<'de>>
 }
 
 #[inline]
+/// Parse a string array (as `&str`) from a value.
 pub fn as_str_array<'de>(value: &'de toml::Value<'de>) -> Result<Vec<&'de str>, ParseError> {
     as_array(value)
         .into_iter()
@@ -212,6 +252,7 @@ pub fn as_str_array<'de>(value: &'de toml::Value<'de>) -> Result<Vec<&'de str>, 
 }
 
 #[inline]
+/// Parse a [`PythonFormatString`] from a TOML value.
 pub fn as_format_string<'de>(
     value: &'de toml::Value<'de>,
 ) -> Result<PythonFormatString, ParseError> {
@@ -225,6 +266,7 @@ pub fn as_format_string<'de>(
 }
 
 #[inline]
+/// Parse a compiled regex from a TOML value.
 pub fn as_regex<'de>(value: &'de toml::Value<'de>) -> Result<config::regex::Regex, ParseError> {
     as_str(value).and_then(|s| {
         // let s = s.replace("\\\\", "\\");
@@ -240,11 +282,13 @@ pub fn as_regex<'de>(value: &'de toml::Value<'de>) -> Result<config::regex::Rege
 }
 
 #[inline]
+/// Parse a owned string from a TOML value.
 pub fn as_string<'de>(value: &'de toml::Value<'de>) -> Result<String, ParseError> {
     as_str(value).map(ToString::to_string)
 }
 
 #[inline]
+/// Parse a `&str` from a TOML value.
 pub fn as_str<'de>(value: &'de toml::Value<'de>) -> Result<&'de str, ParseError> {
     value.as_str().ok_or_else(|| ParseError::UnexpectedType {
         message: "expected a string".to_string(),
@@ -255,6 +299,7 @@ pub fn as_str<'de>(value: &'de toml::Value<'de>) -> Result<&'de str, ParseError>
 }
 
 #[inline]
+/// Parse a boolean from a TOML value.
 pub fn as_bool<'de>(value: &'de toml::Value<'de>) -> Result<bool, ParseError> {
     value.as_bool().ok_or_else(|| ParseError::UnexpectedType {
         message: "expected a boolean".to_string(),
@@ -485,6 +530,7 @@ pub(crate) fn parse_file_config<'de>(
 }
 
 impl Config {
+    /// Parse bumpversion configuration from a `toml_span` value tree.
     pub fn from_pyproject_value(
         config: &toml::Value,
         _file_id: FileId,
@@ -563,6 +609,7 @@ impl Config {
         }))
     }
 
+    /// Parse bumpversion configuration from a `pyproject.toml` string.
     pub fn from_pyproject_toml(
         config: &str,
         file_id: FileId,
@@ -576,6 +623,7 @@ impl Config {
 
 #[cfg(test)]
 #[allow(clippy::too_many_lines, clippy::unnecessary_wraps)]
+/// Test helpers and compatibility tests for parsing `pyproject.toml` bumpversion configuration.
 pub mod tests {
     use crate::{
         config::{
@@ -592,14 +640,16 @@ pub mod tests {
 
     use std::path::PathBuf;
 
-    pub(crate) fn parse_toml(
-        config: &str,
-        printer: &BufferedPrinter,
-    ) -> (
+    pub(crate) type ParseTomlResult = (
         Result<Option<Config>, super::ParseError>,
         usize,
         Vec<Diagnostic<usize>>,
-    ) {
+    );
+
+    pub(crate) fn parse_toml(
+        config: &str,
+        printer: &BufferedPrinter,
+    ) -> eyre::Result<ParseTomlResult> {
         let mut diagnostics = vec![];
         let file_id = printer.add_source_file("bumpversion.toml".to_string(), config.to_string());
         let strict = true;
@@ -607,12 +657,11 @@ pub mod tests {
         if let Err(ref err) = config {
             diagnostics.extend(err.to_diagnostics(file_id));
         }
-        dbg!(&diagnostics);
         for diagnostic in &diagnostics {
-            printer.emit(diagnostic).expect("emit diagnostics");
+            printer.emit(diagnostic).map_err(eyre::Error::from)?;
         }
-        printer.print().expect("print diagnostics");
-        (config, file_id, diagnostics)
+        printer.print().map_err(eyre::Error::from)?;
+        Ok((config, file_id, diagnostics))
     }
 
     #[test]
@@ -650,7 +699,7 @@ pub mod tests {
             version={new_version}"""
         "#};
 
-        let config = parse_toml(pyproject_toml, &BufferedPrinter::default()).0?;
+        let config = parse_toml(pyproject_toml, &BufferedPrinter::default())?.0?;
         println!("config: {config:#?}");
 
         let expected = Config {
@@ -1001,7 +1050,7 @@ pub mod tests {
             check-class-attributes = false
         "#};
 
-        let config = parse_toml(pyproject_toml, &BufferedPrinter::default()).0?;
+        let config = parse_toml(pyproject_toml, &BufferedPrinter::default())?.0?;
         println!("config: {config:#?}");
 
         let expected = Config {
@@ -1159,7 +1208,7 @@ pub mod tests {
             ..Config::default()
         };
 
-        let config = parse_toml(pyproject_toml, &BufferedPrinter::default()).0?;
+        let config = parse_toml(pyproject_toml, &BufferedPrinter::default())?.0?;
         sim_assert_eq!(config, Some(expected));
 
         let pyproject_toml = indoc::indoc! {r#"
@@ -1289,7 +1338,7 @@ pub mod tests {
             .collect(),
         };
 
-        let config = parse_toml(pyproject_toml, &BufferedPrinter::default()).0?;
+        let config = parse_toml(pyproject_toml, &BufferedPrinter::default())?.0?;
         sim_assert_eq!(config, Some(expected));
 
         Ok(())
@@ -1348,7 +1397,7 @@ pub mod tests {
             bump-my-version = "bumpversion.cli:cli"
         "#};
 
-        let config = parse_toml(pyproject_toml, &BufferedPrinter::default()).0?;
+        let config = parse_toml(pyproject_toml, &BufferedPrinter::default())?.0?;
         sim_assert_eq!(config, None);
         Ok(())
     }
@@ -1408,7 +1457,7 @@ pub mod tests {
             bump-my-version = "bumpversion.cli:cli"
         "#};
 
-        let config = parse_toml(pyproject_toml, &BufferedPrinter::default()).0?;
+        let config = parse_toml(pyproject_toml, &BufferedPrinter::default())?.0?;
         sim_assert_eq!(config, None);
         Ok(())
     }
@@ -1421,8 +1470,7 @@ pub mod tests {
             [tool.bumpversion]
             current_version = "1.0.0"
         "#};
-        let config = parse_toml(bumpversion_toml, &BufferedPrinter::default()).0?;
-        dbg!(config);
+        let _config = parse_toml(bumpversion_toml, &BufferedPrinter::default())?.0?;
 
         let expected = Config {
             global: GlobalConfig {
@@ -1431,7 +1479,7 @@ pub mod tests {
             },
             ..Config::default()
         };
-        let config = parse_toml(bumpversion_toml, &BufferedPrinter::default()).0?;
+        let config = parse_toml(bumpversion_toml, &BufferedPrinter::default())?.0?;
         sim_assert_eq!(config, Some(expected));
 
         Ok(())
@@ -1467,7 +1515,7 @@ pub mod tests {
             ]
         "#};
 
-        let config = parse_toml(pyproject_toml, &BufferedPrinter::default()).0?;
+        let config = parse_toml(pyproject_toml, &BufferedPrinter::default())?.0?;
 
         let expected = Config {
             global: GlobalConfig {
@@ -1537,9 +1585,9 @@ pub mod tests {
 
         crate::tests::init();
         let pyproject_toml = include_str!("../../test-data/bump-my-version.pyproject.toml");
-        let mut config = parse_toml(pyproject_toml, &BufferedPrinter::default())
+        let mut config = parse_toml(pyproject_toml, &BufferedPrinter::default())?
             .0?
-            .unwrap();
+            .ok_or_else(|| eyre::eyre!("expected config to be present"))?;
 
         let parse_regex: config::regex::Regex = regex::Regex::new(
             r"(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(\.(?P<dev>post)\d+\.dev\d+)?",

@@ -121,10 +121,10 @@ pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
     if let Some(command) = options.command {
         match command {
             options::SubCommand::Show(show_options) => {
-                return handle_show(show_options, &manager).await;
+                return handle_show(&show_options, &manager);
             }
             options::SubCommand::ShowBump(show_bump_options) => {
-                return handle_show_bump(show_bump_options, &manager).await;
+                return handle_show_bump(&show_bump_options, &manager);
             }
             _ => {}
         }
@@ -145,8 +145,8 @@ pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
     Ok(())
 }
 
-async fn handle_show<VCS, L>(
-    options: options::ShowOptions,
+fn handle_show<VCS, L>(
+    options: &options::ShowOptions,
     manager: &bumpversion::BumpVersion<VCS, L>,
 ) -> eyre::Result<()>
 where
@@ -213,8 +213,8 @@ where
     Ok(())
 }
 
-async fn handle_show_bump<VCS, L>(
-    options: options::ShowBumpOptions,
+fn handle_show_bump<VCS, L>(
+    options: &options::ShowBumpOptions,
     manager: &bumpversion::BumpVersion<VCS, L>,
 ) -> eyre::Result<()>
 where

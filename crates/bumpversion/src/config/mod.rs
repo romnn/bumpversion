@@ -2,14 +2,23 @@
 //!
 //! Provides support for reading bumpversion configuration from various file formats (TOML, INI),
 //! applying defaults, and finalizing settings for version bump operations.
+/// Configuration change-set types.
 pub mod change;
+/// Default values and helpers.
 pub mod defaults;
+/// File configuration sections.
 pub mod file;
+/// Global configuration values.
 pub mod global;
+/// INI parser and compatibility handling.
 pub mod ini;
+/// `pyproject.toml` parsing.
 pub mod pyproject_toml;
+/// Regex wrapper types and templates.
 pub mod regex;
+/// `.bumpversion.toml` parsing.
 pub mod toml;
+/// Version component specifications.
 pub mod version;
 
 pub use change::FileChange;
@@ -33,6 +42,7 @@ pub enum Error {
         /// Path to the problematic config file.
         path: PathBuf,
         #[source]
+        /// Underlying parse error.
         source: pyproject_toml::ParseError,
     },
     /// INI parsing error for a config file.
@@ -41,6 +51,7 @@ pub enum Error {
         /// Path to the problematic config file.
         path: PathBuf,
         #[source]
+        /// Underlying parse error.
         source: ini::ParseError,
     },
     /// Cargo.toml parsing not yet supported or failed.
@@ -55,6 +66,7 @@ pub enum Error {
     #[error("failed to join spawned task")]
     Join(#[from] tokio::task::JoinError),
     #[error(transparent)]
+    /// Error reported via diagnostics emission.
     Diagnostics(#[from] crate::diagnostics::Error),
 }
 
@@ -81,6 +93,7 @@ pub enum ConfigFile {
 
 impl ConfigFile {
     #[must_use]
+    /// Return the path of this config file.
     pub fn path(&self) -> &Path {
         #[allow(clippy::match_same_arms)]
         match self {
@@ -107,7 +120,9 @@ pub fn config_file_locations(dir: &Path) -> impl Iterator<Item = ConfigFile> + u
     .into_iter()
 }
 
+/// Merge one configuration value into another.
 pub trait MergeWith<T> {
+    /// Merge `other` into `self`.
     fn merge_with(&mut self, other: T);
 }
 
@@ -137,6 +152,7 @@ pub enum InputFile {
 }
 
 impl InputFile {
+    /// Create an [`InputFile::GlobPattern`] from a glob string.
     pub fn glob(pattern: impl Into<String>) -> Self {
         Self::GlobPattern {
             pattern: pattern.into(),
@@ -145,6 +161,7 @@ impl InputFile {
     }
 
     #[must_use]
+    /// Return the contained path, if this is a concrete [`InputFile::Path`].
     pub fn as_path(&self) -> Option<&Path> {
         match self {
             Self::Path(path) => Some(path.as_path()),

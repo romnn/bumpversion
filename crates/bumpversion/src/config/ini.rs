@@ -15,36 +15,55 @@ use std::path::{Path, PathBuf};
 pub use ini::value::Options;
 
 #[derive(thiserror::Error, Debug)]
+/// Errors that can occur while parsing INI-based configuration.
 pub enum ParseError {
     #[error("{message}")]
+    /// A required key is missing from a section.
     MissingKey {
+        /// The missing key name.
         key: String,
+        /// Human-friendly error message.
         message: String,
+        /// Source span of the relevant config section.
         span: Span,
     },
     #[error("{message}")]
+    /// A value had an unexpected type.
     UnexpectedType {
+        /// Human-friendly error message.
         message: String,
+        /// Expected TOML/INI value kinds.
         expected: Vec<ValueKind>,
+        /// Source span of the offending value.
         span: Span,
     },
     #[error("{message}")]
+    /// A value could not be parsed as a Python-style format string.
     InvalidFormatString {
         #[source]
+        /// Underlying parse error.
         source: f_string::ParseError,
+        /// Human-friendly error message.
         message: String,
+        /// Source span of the offending value.
         span: Span,
     },
     #[error("{message}")]
+    /// A regex string could not be compiled.
     InvalidRegex {
         #[source]
+        /// Underlying regex compilation error.
         source: regex::Error,
+        /// Human-friendly error message.
         message: String,
+        /// Source span of the offending value.
         span: Span,
     },
     #[error("{source}")]
+    /// INI deserialization error.
     Ini {
         #[source]
+        /// Underlying INI parse error.
         source: ini::Error,
     },
 }
@@ -126,6 +145,7 @@ mod diagnostics {
 }
 
 #[inline]
+/// Parse a boolean from an INI value.
 pub fn as_bool(value: &ini::Spanned<String>) -> Result<bool, ParseError> {
     match value.as_ref().trim().to_ascii_lowercase().as_str() {
         "true" => Ok(true),
@@ -139,6 +159,7 @@ pub fn as_bool(value: &ini::Spanned<String>) -> Result<bool, ParseError> {
 }
 
 #[inline]
+/// Parse a [`PythonFormatString`] from an INI value.
 pub fn as_format_string(value: ini::Spanned<String>) -> Result<PythonFormatString, ParseError> {
     let ini::Spanned { inner, span } = value;
     PythonFormatString::parse(&inner).map_err(|source| ParseError::InvalidFormatString {
@@ -149,6 +170,7 @@ pub fn as_format_string(value: ini::Spanned<String>) -> Result<PythonFormatStrin
 }
 
 #[inline]
+/// Parse a compiled regex from an INI value.
 pub fn as_regex(value: ini::Spanned<String>) -> Result<config::Regex, ParseError> {
     let ini::Spanned { inner, span } = value;
     // let inner = inner.replace("\\\\", "\\");
@@ -163,6 +185,7 @@ pub fn as_regex(value: ini::Spanned<String>) -> Result<config::Regex, ParseError
 }
 
 #[inline]
+/// Parse a list of strings from an INI value while preserving the input span.
 pub fn as_spanned_string_array(
     value: ini::Spanned<String>,
     allow_single_value: bool,
@@ -195,6 +218,7 @@ pub fn as_spanned_string_array(
 }
 
 #[inline]
+/// Parse a list of strings from an INI value.
 pub fn as_string_array(
     value: ini::Spanned<String>,
     allow_single_value: bool,
@@ -217,6 +241,7 @@ pub fn as_string_array(
 
 #[inline]
 #[must_use]
+/// Treat the string literal `None` as absence.
 pub fn as_optional(value: ini::Spanned<String>) -> Option<ini::Spanned<String>> {
     if value.as_ref() == "None" {
         None
@@ -495,6 +520,7 @@ pub(crate) fn parse_file_config(
 }
 
 impl config::Config {
+    /// Parse bumpversion configuration from an INI value tree.
     pub fn from_ini_value(
         mut config: ini::Value,
         file_id: FileId,
@@ -590,6 +616,7 @@ impl config::Config {
         if found { Ok(Some(out)) } else { Ok(None) }
     }
 
+    /// Parse bumpversion configuration from an INI string.
     pub fn from_ini(
         config: &str,
         options: Options,
@@ -603,6 +630,7 @@ impl config::Config {
         Self::from_ini_value(config, file_id, strict, allow_unknown, diagnostics)
     }
 
+    /// Parse bumpversion configuration from a `setup.cfg` INI string.
     pub fn from_setup_cfg_ini(
         config: &str,
         options: Options,
@@ -619,7 +647,17 @@ impl config::Config {
 
 static CONFIG_CURRENT_VERSION_REGEX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(
     || {
-        regex::RegexBuilder::new(r"(?P<section_prefix>\\[bumpversion]\n[^\[]*current_version\\s*=\\s*)(?P<version>\{current_version\})").multi_line(true).build().unwrap()
+        #[expect(
+            clippy::expect_used,
+            reason = "static regex is a compile-time literal and known to be valid"
+        )]
+        let regex = regex::RegexBuilder::new(
+            r"(?P<section_prefix>\\[bumpversion]\n[^\[]*current_version\\s*=\\s*)(?P<version>\{current_version\})",
+        )
+        .multi_line(true)
+        .build()
+        .expect("static current_version replacement regex must be valid");
+        regex
     },
 );
 
@@ -709,15 +747,17 @@ mod tests {
 
     use serde_ini_spanned::value::Options;
 
+    type ParseIniResult = (
+        Result<Option<Config>, super::ParseError>,
+        usize,
+        Vec<Diagnostic<usize>>,
+    );
+
     fn parse_ini(
         config: &str,
         options: Options,
         printer: &BufferedPrinter,
-    ) -> (
-        Result<Option<Config>, super::ParseError>,
-        usize,
-        Vec<Diagnostic<usize>>,
-    ) {
+    ) -> eyre::Result<ParseIniResult> {
         let mut diagnostics = vec![];
         let file_id = printer.add_source_file("bumpversion.cfg".to_string(), config.to_string());
         let strict = true;
@@ -726,10 +766,10 @@ mod tests {
             diagnostics.extend(err.to_diagnostics(file_id));
         }
         for diagnostic in &diagnostics {
-            printer.emit(diagnostic).expect("emit diagnostics");
+            printer.emit(diagnostic).map_err(eyre::Error::from)?;
         }
-        printer.print().expect("print diagnostics");
-        (config, file_id, diagnostics)
+        printer.print().map_err(eyre::Error::from)?;
+        Ok((config, file_id, diagnostics))
     }
 
     #[test]
@@ -752,6 +792,7 @@ mod tests {
             Options::default(),
             &BufferedPrinter::default(),
         )
+        ?
         .0?;
 
         let expected = Config {
@@ -847,6 +888,7 @@ mod tests {
             Options::default(),
             &BufferedPrinter::default(),
         )
+        ?
         .0?;
 
         let expected = Config {
@@ -992,6 +1034,7 @@ mod tests {
             Options::default(),
             &BufferedPrinter::default(),
         )
+        ?
         .0?;
         let expected = Config {
             global: GlobalConfig {
@@ -1091,6 +1134,7 @@ mod tests {
             Options::default(),
             &BufferedPrinter::default(),
         )
+        ?
         .0?;
         let expected = Config {
             global: GlobalConfig {
@@ -1140,6 +1184,7 @@ mod tests {
             Options::default(),
             &BufferedPrinter::default(),
         )
+        ?
         .0?;
         let expected = Config {
             global: GlobalConfig {

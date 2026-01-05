@@ -1,8 +1,11 @@
+//! Integration tests for version parsing and serialization.
+
 use bumpversion::{
     config::version::VersionComponentSpec,
     f_string::PythonFormatString,
     version::{Version, VersionSpec},
 };
+use color_eyre::eyre;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use similar_asserts::assert_eq;
@@ -21,52 +24,74 @@ fn create_version(spec: &VersionSpec, parts: &[(&str, &str)]) -> Version {
 }
 
 #[test]
-fn test_parse_version_empty() {
+fn test_parse_version_empty() -> eyre::Result<()> {
     let spec = semver_spec();
-    let regex = regex::Regex::new(r"(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)").unwrap();
+    let regex = regex::Regex::new(r"(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)")?;
     
     assert!(Version::parse("", &regex, &spec).is_none());
+    Ok(())
 }
 
 #[test]
-fn test_parse_version_semver() {
+fn test_parse_version_semver() -> eyre::Result<()> {
     let spec = semver_spec();
     // Python test uses SEMVER_PATTERN, we'll use a simplified one matching the components we have
-    let regex = regex::Regex::new(r"(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)").unwrap();
+    let regex = regex::Regex::new(r"(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)")?;
     
-    let version = Version::parse("1.2.3", &regex, &spec).expect("Should parse");
+    let version = Version::parse("1.2.3", &regex, &spec)
+        .ok_or_else(|| eyre::eyre!("expected version to parse"))?;
     
-    assert_eq!(version.get("major").unwrap().value(), Some("1"));
-    assert_eq!(version.get("minor").unwrap().value(), Some("2"));
-    assert_eq!(version.get("patch").unwrap().value(), Some("3"));
+    assert_eq!(
+        version
+            .get("major")
+            .ok_or_else(|| eyre::eyre!("missing major component"))?
+            .value(),
+        Some("1")
+    );
+    assert_eq!(
+        version
+            .get("minor")
+            .ok_or_else(|| eyre::eyre!("missing minor component"))?
+            .value(),
+        Some("2")
+    );
+    assert_eq!(
+        version
+            .get("patch")
+            .ok_or_else(|| eyre::eyre!("missing patch component"))?
+            .value(),
+        Some("3")
+    );
+    Ok(())
 }
 
 #[test]
-fn test_serialize_format_selection() {
+fn test_serialize_format_selection() -> eyre::Result<()> {
     let spec = semver_spec();
     let version = create_version(&spec, &[("major", "1"), ("minor", "2"), ("patch", "3")]);
     
     let patterns: Vec<PythonFormatString> = vec![
-        "{major}.{minor}.{patch}".parse().unwrap(),
-        "{major}.{minor}".parse().unwrap(),
-        "{major}".parse().unwrap(),
+        "{major}.{minor}.{patch}".parse()?,
+        "{major}.{minor}".parse()?,
+        "{major}".parse()?,
     ];
     
     let ctx: HashMap<String, String> = HashMap::new();
-    let serialized = version.serialize(&patterns, &ctx).unwrap();
+    let serialized = version.serialize(&patterns, &ctx)?;
     assert_eq!(serialized, "1.2.3");
+    Ok(())
 }
 
 #[test]
-fn test_serialize_format_selection_shorter() {
+fn test_serialize_format_selection_shorter() -> eyre::Result<()> {
     let spec = semver_spec();
     // 1.2.0 -> "1.2" if available
     let version = create_version(&spec, &[("major", "1"), ("minor", "2"), ("patch", "0")]);
     
     let patterns: Vec<PythonFormatString> = vec![
-        "{major}.{minor}.{patch}".parse().unwrap(),
-        "{major}.{minor}".parse().unwrap(),
-        "{major}".parse().unwrap(),
+        "{major}.{minor}.{patch}".parse()?,
+        "{major}.{minor}".parse()?,
+        "{major}".parse()?,
     ];
     
     let ctx: HashMap<String, String> = HashMap::new();
@@ -92,37 +117,40 @@ fn test_serialize_format_selection_shorter() {
     
     // So it should pick pattern 2: "1.2"
     
-    let serialized = version.serialize(&patterns, &ctx).unwrap();
+    let serialized = version.serialize(&patterns, &ctx)?;
     assert_eq!(serialized, "1.2");
+    Ok(())
 }
 
 #[test]
-fn test_serialize_format_selection_shortest() {
+fn test_serialize_format_selection_shortest() -> eyre::Result<()> {
     let spec = semver_spec();
     // 1.0.0 -> "1"
     let version = create_version(&spec, &[("major", "1"), ("minor", "0"), ("patch", "0")]);
     
     let patterns: Vec<PythonFormatString> = vec![
-        "{major}.{minor}.{patch}".parse().unwrap(),
-        "{major}.{minor}".parse().unwrap(),
-        "{major}".parse().unwrap(),
+        "{major}.{minor}.{patch}".parse()?,
+        "{major}.{minor}".parse()?,
+        "{major}".parse()?,
     ];
     
     let ctx: HashMap<String, String> = HashMap::new();
-    let serialized = version.serialize(&patterns, &ctx).unwrap();
+    let serialized = version.serialize(&patterns, &ctx)?;
     assert_eq!(serialized, "1");
+    Ok(())
 }
 
 #[test]
-fn test_serialize_with_newlines() {
+fn test_serialize_with_newlines() -> eyre::Result<()> {
     let spec = semver_spec();
     let version = create_version(&spec, &[("major", "31"), ("minor", "0"), ("patch", "3")]);
     
     let patterns: Vec<PythonFormatString> = vec![
-        PythonFormatString::parse("MAJOR={major}\nMINOR={minor}\nPATCH={patch}\n").unwrap()
+        PythonFormatString::parse("MAJOR={major}\nMINOR={minor}\nPATCH={patch}\n")?
     ];
     
     let ctx: HashMap<String, String> = HashMap::new();
-    let serialized = version.serialize(&patterns, &ctx).unwrap();
+    let serialized = version.serialize(&patterns, &ctx)?;
     assert_eq!(serialized, "MAJOR=31\nMINOR=0\nPATCH=3\n");
+    Ok(())
 }
