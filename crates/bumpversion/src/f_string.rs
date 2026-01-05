@@ -318,6 +318,14 @@ impl AsRef<Vec<Value>> for PythonFormatString {
     }
 }
 
+impl std::str::FromStr for PythonFormatString {
+    type Err = parser::ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::parse(s)
+    }
+}
+
 #[derive(thiserror::Error, Debug, PartialEq, Eq, PartialOrd, Hash)]
 #[error("missing argument {0:?}")]
 pub struct MissingArgumentError(String);

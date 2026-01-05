@@ -23,6 +23,9 @@ keywords = [
 [lib]
 crate-type = ["cdylib", "lib"]
 
+[lints]
+workspace = true
+
 [dependencies]
 thiserror.workspace = true
 tracing.workspace = true
