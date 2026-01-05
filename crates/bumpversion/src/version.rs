@@ -267,6 +267,12 @@ impl Component {
     /// * `spec` - Component configuration (first value, dependencies, bump rules).
     #[must_use]
     pub fn new(value: Option<&str>, spec: VersionComponentSpec) -> Self {
+        let mut spec = spec;
+
+        if spec.values.is_empty() && spec.calver_format.is_none() && spec.first_value.is_none() {
+            spec.first_value = Some("0".to_string());
+        }
+
         // let func = ValuesFunction {
         //     values: spec.values.clone(),
         // };
@@ -753,8 +759,14 @@ fn parse_raw_version<'a>(version: &'a str, pattern: &'a regex::Regex) -> RawVers
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        config,
+        diagnostics::BufferedPrinter,
+        version::{Version, VersionSpec},
+    };
     use color_eyre::eyre;
     use similar_asserts::assert_eq as sim_assert_eq;
+    use std::collections::HashMap;
 
     #[test]
     fn test_parse_raw_version() -> eyre::Result<()> {
@@ -767,6 +779,49 @@ mod tests {
                 .into_iter()
                 .collect::<super::RawVersion>(),
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_minor_bump_keeps_patch_component() -> eyre::Result<()> {
+        crate::tests::init();
+
+        let toml = indoc::indoc! {r#"
+            [tool.bumpversion]
+            current_version = "0.0.4"
+            tag = true
+            tag_name = "{new_version}"
+            allow_dirty = false
+            commit = true
+            pre_commit_hooks = []
+            post_commit_hooks = []
+        "#};
+
+        let printer = BufferedPrinter::default();
+        let file_id = printer.add_source_file("pyproject.toml".to_string(), toml.to_string());
+        let strict = true;
+        let mut diagnostics = vec![];
+
+        let config = config::Config::from_pyproject_toml(toml, file_id, strict, &mut diagnostics)?
+            .expect("config should be present")
+            .finalize();
+
+        let components = config::version::version_component_configs(&config);
+        let version_spec = VersionSpec::from_components(components);
+
+        let current_version = Version::parse(
+            "0.0.4",
+            &config.global.parse_version_pattern,
+            &version_spec,
+        )
+        .expect("current version should parse");
+
+        let new_version = current_version.bump("minor")?;
+        let ctx = HashMap::<String, String>::new();
+        let new_version_serialized =
+            new_version.serialize(&config.global.serialize_version_patterns, &ctx)?;
+
+        sim_assert_eq!(new_version_serialized, "0.1.0");
         Ok(())
     }
 }
