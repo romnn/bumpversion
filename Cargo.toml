@@ -20,7 +20,7 @@ indexing_slicing = "deny"
 missing_errors_doc = "allow"
 
 [workspace.package]
-version = "0.0.7"
+version = "0.0.8"
 edition = "2024"
 authors = ["romnn <contact@romnn.com>"]
 description = "Update all version strings in your project and optionally commit and tag the changes"
