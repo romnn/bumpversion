@@ -88,6 +88,7 @@ impl<T> AsMut<T> for Spanned<T> {
 }
 
 impl<T> Spanned<T> {
+    /// Create a new [`Spanned`] value from a source `span` and `value`.
     pub fn new(span: impl Into<Span>, value: T) -> Self {
         Self {
             span: span.into(),
@@ -95,6 +96,7 @@ impl<T> Spanned<T> {
         }
     }
 
+    /// Create a [`Spanned`] value with a dummy span.
     pub fn dummy(value: T) -> Self {
         Self {
             span: Span::default(),
@@ -102,6 +104,7 @@ impl<T> Spanned<T> {
         }
     }
 
+    /// Consume this wrapper and return the inner value.
     pub fn into_inner(self) -> T {
         self.inner
     }
@@ -130,6 +133,7 @@ impl PartialEq<Spanned<&str>> for Spanned<String> {
 
 impl Spanned<String> {
     #[must_use]
+    /// Return the inner string slice.
     pub fn as_str(&self) -> &str {
         self.as_ref().as_str()
     }
@@ -264,6 +268,7 @@ static DEFAULT_STYLES: LazyLock<term::Styles> = LazyLock::new(term::Styles::defa
 
 impl Printer<term::termcolor::Buffer> {
     #[must_use]
+    /// Create a buffered printer useful for capturing diagnostics output in tests.
     pub fn buffered() -> Self {
         let writer = term::termcolor::Buffer::ansi();
         let diagnostic_config = term::Config::default();
@@ -288,6 +293,7 @@ impl Printer<term::termcolor::Buffer> {
 
 impl Printer<term::StylesWriter<'static, term::termcolor::StandardStream>> {
     #[must_use]
+    /// Create a printer writing styled diagnostics to stderr.
     pub fn stderr(color_choice: Option<term::termcolor::ColorChoice>) -> Self {
         let color_choice = color_choice.unwrap_or(term::termcolor::ColorChoice::Auto);
         let writer = term::termcolor::StandardStream::stderr(color_choice);
@@ -303,6 +309,7 @@ impl Printer<term::StylesWriter<'static, term::termcolor::StandardStream>> {
 }
 
 impl<W> Printer<W> {
+    /// Resolve the 0-based line indices for each label in `diagnostic`.
     pub fn lines(
         &self,
         diagnostic: &Diagnostic<usize>,
@@ -319,6 +326,7 @@ impl<W> Printer<W> {
             .collect()
     }
 
+    /// Register a new source file in the printer's internal registry.
     pub fn add_source_file(&self, name: impl ToSourceName, source: String) -> usize {
         let mut files = self.files.write();
         files.add(name.to_source_name(), source)
@@ -329,6 +337,7 @@ impl<W> Printer<W>
 where
     W: term::WriteStyle,
 {
+    /// Emit a diagnostic to this printer.
     pub fn emit(&self, diagnostic: &Diagnostic<usize>) -> Result<(), files::Error> {
         let mut writer = self.writer.lock();
         term::emit_to_write_style(

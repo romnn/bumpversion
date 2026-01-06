@@ -17,25 +17,45 @@ impl Invert for Option<bool> {
     }
 }
 
-/// Which version component to bump: `major`, `minor`, or `patch`.
+/// Subcommands for the CLI.
 #[derive(clap::Parser, Debug, Clone)]
-pub enum BumpCommand {
+pub enum SubCommand {
     #[clap(name = "major")]
     Major,
     #[clap(name = "minor")]
     Minor,
     #[clap(name = "patch")]
     Patch,
+    #[clap(name = "show")]
+    Show(ShowOptions),
+    #[clap(name = "show-bump")]
+    ShowBump(ShowBumpOptions),
+    #[clap(name = "bump")]
+    Bump(BumpOptions),
 }
 
-impl AsRef<str> for BumpCommand {
-    fn as_ref(&self) -> &str {
-        match self {
-            BumpCommand::Major => "major",
-            BumpCommand::Minor => "minor",
-            BumpCommand::Patch => "patch",
-        }
-    }
+#[derive(clap::Args, Debug, Clone)]
+pub struct ShowOptions {
+    #[arg(help = "The variables or configuration settings to show")]
+    pub variables: Vec<String>,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+pub struct ShowBumpOptions {
+    #[arg(help = "The version component to bump")]
+    pub component: Option<String>,
+
+    #[arg()]
+    pub args: Vec<String>,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+pub struct BumpOptions {
+    #[arg(help = "The version component to bump")]
+    pub component: String,
+
+    #[arg()]
+    pub args: Vec<String>,
 }
 
 /// Logging flags to `#[command(flatten)]` into your CLI
@@ -75,21 +95,24 @@ pub struct Options {
     #[clap(
         long = "dir",
         help = "repository directory to run bumpversion in",
-        env = "BUMPVERSION_DIR"
+        env = "BUMPVERSION_DIR",
+        global = true,
     )]
     pub dir: Option<PathBuf>,
 
     #[clap(
         long = "config-file",
         help = "config file to read most of the variables from",
-        env = "BUMPVERSION_CONFIG_FILE"
+        env = "BUMPVERSION_CONFIG_FILE",
+        global = true,
     )]
     pub config_file: Option<PathBuf>,
 
     #[arg(
         long = "color",
         env = "BUMPVERSION_COLOR",
-        help = "enable or disable color"
+        help = "enable or disable color",
+        global = true,
     )]
     pub color_choice: Option<termcolor::ColorChoice>,
 
@@ -100,7 +123,8 @@ pub struct Options {
         long = "log",
         env = "BUMPVERSION_LOG_LEVEL",
         aliases = ["log-level"],
-        help = "Log level. When using a more sophisticated logging setup using RUST_LOG environment variable, this option is overwritten."
+        help = "Log level. When using a more sophisticated logging setup using RUST_LOG environment variable, this option is overwritten.",
+        global = true,
     )]
     pub log_level: Option<tracing::metadata::Level>,
 
@@ -109,6 +133,7 @@ pub struct Options {
         help = "don't abort if working directory is dirty",
         env = "BUMPVERSION_ALLOW_DIRTY",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub allow_dirty: Option<bool>,
 
@@ -117,62 +142,71 @@ pub struct Options {
         help = "explicitly abort if dirty",
         env = "BUMPVERSION_NO_ALLOW_DIRTY",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub no_allow_dirty: Option<bool>,
 
     #[clap(
         long = "current-version",
         help = "version that needs to be updated",
-        env = "BUMPVERSION_CURRENT_VERSION"
+        env = "BUMPVERSION_CURRENT_VERSION",
+        global = true,
     )]
     pub current_version: Option<String>,
 
     #[clap(
         long = "new-version",
         help = "new version that should be in the files",
-        env = "BUMPVERSION_NEW_VERSION"
+        env = "BUMPVERSION_NEW_VERSION",
+        global = true,
     )]
     pub new_version: Option<String>,
 
     #[clap(
         long = "parse",
         help = "regex parsing the version string",
-        env = "BUMPVERSION_PARSE"
+        env = "BUMPVERSION_PARSE",
+        global = true,
     )]
     pub parse_version_pattern: Option<String>,
 
     #[clap(
         long = "serialize",
         help = "how to format what is parsed back to a version",
-        env = "BUMPVERSION_SERIALIZE"
+        env = "BUMPVERSION_SERIALIZE",
+        global = true,
     )]
     pub serialize_version_patterns: Option<Vec<String>>,
 
     #[clap(
         long = "search",
         help = "template for complete string to search",
-        env = "BUMPVERSION_SEARCH"
+        env = "BUMPVERSION_SEARCH",
+        global = true,
     )]
     pub search: Option<String>,
 
     #[clap(
         long = "replace",
         help = "template for complete string to replace",
-        env = "BUMPVERSION_REPLACE"
+        env = "BUMPVERSION_REPLACE",
+        global = true,
     )]
     pub replace: Option<String>,
 
     #[clap(
         long = "regex",
         help = "treat the search parameter as a regular expression",
-        env = "BUMPVERSION_REGEX"
+        env = "BUMPVERSION_REGEX",
+        global = true,
     )]
     pub regex: Option<bool>,
 
     #[clap(
         long = "no-regex",
         help = "explicitly do not treat the search parameter as a regular expression",
-        env = "BUMPVERSION_NO_REGEX"
+        env = "BUMPVERSION_NO_REGEX",
+        global = true,
     )]
     pub no_regex: Option<bool>,
 
@@ -181,6 +215,7 @@ pub struct Options {
         help = "only replace the version in files specified on the command line, ignoring the files from the configuration file",
         env = "BUMPVERSION_NO_CONFIGURED_FILES",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub no_configured_files: Option<bool>,
 
@@ -189,6 +224,7 @@ pub struct Options {
         help = "ignore any missing files when searching and replacing in files",
         env = "BUMPVERSION_IGNORE_MISSING_FILES",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub ignore_missing_files: Option<bool>,
 
@@ -197,6 +233,7 @@ pub struct Options {
         help = "do not allow missing files when searching and replacing in files",
         env = "BUMPVERSION_NO_IGNORE_MISSING_FILES",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub no_ignore_missing_files: Option<bool>,
 
@@ -205,6 +242,7 @@ pub struct Options {
         help = "ignore any missing versions when searching and replacing in files",
         env = "BUMPVERSION_IGNORE_MISSING_VERSION",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub ignore_missing_version: Option<bool>,
 
@@ -213,6 +251,7 @@ pub struct Options {
         help = "do not allow missing versions when searching and replacing in files",
         env = "BUMPVERSION_NO_IGNORE_MISSING_VERSION",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub no_ignore_missing_version: Option<bool>,
 
@@ -221,7 +260,8 @@ pub struct Options {
         long = "dry-run",
         help = "don't write any files, just pretend.",
         env = "BUMPVERSION_DRY_RUN",
-        action = clap::ArgAction::SetTrue
+        action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub dry_run: Option<bool>,
 
@@ -230,6 +270,7 @@ pub struct Options {
         help = "commit to version control",
         env = "BUMPVERSION_COMMIT",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub commit: Option<bool>,
 
@@ -238,6 +279,7 @@ pub struct Options {
         help = "do not commit to version control",
         env = "BUMPVERSION_NO_COMMIT",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub no_commit: Option<bool>,
 
@@ -246,6 +288,7 @@ pub struct Options {
         help = "create a tag in version control",
         env = "BUMPVERSION_TAG",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub tag: Option<bool>,
 
@@ -254,6 +297,7 @@ pub struct Options {
         help = "do not create a tag in version control",
         env = "BUMPVERSION_NO_TAG",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub no_tag: Option<bool>,
 
@@ -262,6 +306,7 @@ pub struct Options {
         help = "sign tags if created",
         env = "BUMPVERSION_SIGN_TAGS",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub sign_tags: Option<bool>,
 
@@ -270,20 +315,23 @@ pub struct Options {
         help = "do not sign tags if created",
         env = "BUMPVERSION_NO_SIGN_TAGS",
         action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub no_sign_tag: Option<bool>,
 
     #[clap(
         long = "tag-name",
         help = "tag name (only works with --tag)",
-        env = "BUMPVERSION_TAG_NAME"
+        env = "BUMPVERSION_TAG_NAME",
+        global = true,
     )]
     pub tag_name: Option<String>,
 
     #[clap(
         long = "tag-message",
         help = "tag message",
-        env = "BUMPVERSION_TAG_MESSAGE"
+        env = "BUMPVERSION_TAG_MESSAGE",
+        global = true,
     )]
     pub tag_message: Option<String>,
 
@@ -291,21 +339,23 @@ pub struct Options {
         short = 'm',
         long = "message",
         help = "commit message",
-        env = "BUMPVERSION_MESSAGE"
+        env = "BUMPVERSION_MESSAGE",
+        global = true,
     )]
     pub commit_message: Option<String>,
 
     #[clap(
         long = "commit-args",
         help = "extra arguments to commit command",
-        env = "BUMPVERSION_COMMIT_ARGS"
+        env = "BUMPVERSION_COMMIT_ARGS",
+        global = true,
     )]
     pub commit_args: Option<String>,
 
     #[clap(subcommand)]
-    pub bump: Option<BumpCommand>,
+    pub command: Option<SubCommand>,
 
-    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    #[arg()]
     pub args: Vec<String>,
 }
 
@@ -346,39 +396,46 @@ pub fn parse_positional_arguments(
     components: &config::VersionComponentConfigs,
 ) -> eyre::Result<(Option<String>, Vec<PathBuf>)> {
     let mut cli_files = vec![];
-    let mut bump: Option<String> = options
-        .bump
-        .as_ref()
-        .map(AsRef::as_ref)
-        .map(ToString::to_string);
+    let mut bump: Option<String> = None;
 
-    // first, check for invalid flags
-    for arg in &options.args {
-        if arg.starts_with("--") {
-            eyre::bail!("unknown flag {arg:?}");
-        }
-    }
-
-    if !options.args.is_empty() {
-        if options.bump.is_none() {
-            // first argument must be version component to bump
-            let component = options.args.remove(0);
-            if components.contains_key(&component) {
-                bump = Some(component);
-
-                // remaining arguments are files
-                cli_files.extend(options.args.drain(..).map(PathBuf::from));
-            } else {
-                eyre::bail!(
-                    "first argument must be one of the version components {:?}",
-                    components.keys().collect::<Vec<_>>()
-                )
+    if let Some(command) = &options.command {
+        match command {
+            SubCommand::Major => bump = Some("major".to_string()),
+            SubCommand::Minor => bump = Some("minor".to_string()),
+            SubCommand::Patch => bump = Some("patch".to_string()),
+            SubCommand::Bump(opts) => {
+                bump = Some(opts.component.clone());
+                cli_files.extend(opts.args.iter().map(PathBuf::from));
             }
-        } else {
-            // assume all arguments are files to run on
+            SubCommand::Show(_) | SubCommand::ShowBump(_) => {
+                // These commands don't produce a 'bump' action or files in the same way
+                // They are handled separately in common.rs
+            }
+        }
+    } else if !options.args.is_empty() {
+        // No subcommand, check legacy args
+        // first, check for invalid flags in the args
+        for arg in &options.args {
+            if arg.starts_with("--") {
+                eyre::bail!("unknown flag {arg:?}");
+            }
+        }
+
+        // first argument must be version component to bump
+        let component = options.args.remove(0);
+        if components.contains_key(&component) {
+            bump = Some(component);
+
+            // remaining arguments are files
             cli_files.extend(options.args.drain(..).map(PathBuf::from));
+        } else {
+            eyre::bail!(
+                "first argument must be one of the version components {:?}",
+                components.keys().collect::<Vec<_>>()
+            )
         }
     }
+
     Ok((bump, cli_files))
 }
 

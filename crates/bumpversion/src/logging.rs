@@ -48,6 +48,7 @@ pub struct TracingLogger {
 
 impl TracingLogger {
     #[must_use]
+    /// Create a new [`TracingLogger`] with the given maximum verbosity.
     pub fn new(verbosity: Verbosity) -> Self {
         Self { verbosity }
     }

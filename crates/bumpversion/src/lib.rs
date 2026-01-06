@@ -72,6 +72,7 @@ pub mod files;
 pub mod hooks;
 pub mod logging;
 pub mod vcs;
+/// Version parsing, bumping, and serialization.
 pub mod version;
 
 use crate::{
@@ -187,8 +188,7 @@ where
                         })
                     }
                     config::ConfigFile::CargoToml(_) => {
-                        todo!("cargo");
-                        // Ok(None)
+                        Ok(None)
                     }
                 };
 
@@ -279,6 +279,9 @@ pub struct BumpVersion<VCS, L> {
     pub config_file: Option<config::ConfigFile>,
 }
 
+/// Apply configured version modifications to all configured files.
+///
+/// Returns a list of file paths paired with their modifications (or `None` if no changes were made).
 pub async fn apply_modifications<'a, VCS, S>(
     configured_files: &'a IndexMap<PathBuf, Vec<config::change::FileChange>>,
     current_version: &version::Version,
@@ -592,7 +595,7 @@ where
                     .await
                 }
                 config::ConfigFile::CargoToml(_) => {
-                    todo!("cargo support")
+                    Ok(None)
                 }
             }?;
 

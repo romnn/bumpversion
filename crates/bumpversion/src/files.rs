@@ -33,17 +33,23 @@ use std::path::{Path, PathBuf};
 #[derive(thiserror::Error, Debug)]
 pub enum ReplaceVersionError {
     #[error(transparent)]
+    /// I/O error while reading or writing a file.
     Io(#[from] IoError),
     #[error(transparent)]
+    /// Failed to serialize a version according to the configured patterns.
     Serialize(#[from] version::SerializeError),
     #[error(transparent)]
+    /// Required template argument is missing.
     MissingArgument(#[from] f_string::MissingArgumentError),
     #[error(transparent)]
+    /// Invalid Python-style format string.
     InvalidFormatString(#[from] f_string::ParseError),
 
     #[error(transparent)]
+    /// Failed to format a regex template.
     RegexTemplate(#[from] config::regex::RegexTemplateError),
     #[error(transparent)]
+    /// TOML editing error.
     Toml(#[from] toml_edit::TomlError),
 }
 
@@ -260,8 +266,10 @@ where
 #[derive(thiserror::Error, Debug)]
 pub enum GlobError {
     #[error(transparent)]
+    /// Invalid glob pattern.
     Pattern(#[from] glob::PatternError),
     #[error(transparent)]
+    /// Error while iterating glob matches.
     Glob(#[from] glob::GlobError),
 }
 
@@ -276,6 +284,7 @@ pub struct IoError {
 }
 
 impl IoError {
+    /// Create a new [`IoError`] with a source error and a path.
     pub fn new(source: impl Into<std::io::Error>, path_or_stream: impl Into<PathBuf>) -> Self {
         Self {
             source: source.into(),
@@ -297,8 +306,10 @@ impl std::fmt::Display for IoError {
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error(transparent)]
+    /// Error while resolving file globs.
     Glob(#[from] GlobError),
     #[error(transparent)]
+    /// I/O error while resolving files.
     Io(#[from] IoError),
 }
 

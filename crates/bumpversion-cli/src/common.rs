@@ -71,13 +71,21 @@ pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
     // if both versions are present, they should match
     if let Some((configured_version, actual_version)) =
         configured_version.as_ref().zip(actual_version.as_ref())
-        && configured_version != actual_version {
-            tracing::warn!(
-                "version {configured_version} from config does not match last tagged version ({actual_version})",
-            );
-        }
+        && configured_version != actual_version
+    {
+        tracing::warn!(
+            "version {configured_version} from config does not match last tagged version ({actual_version})",
+        );
+    }
 
-    check_is_dirty(&repo, &config).await?;
+    let is_read_only_command = matches!(
+        options.command,
+        Some(options::SubCommand::Show(_) | options::SubCommand::ShowBump(_))
+    );
+
+    if !is_read_only_command {
+        check_is_dirty(&repo, &config).await?;
+    }
 
     // build resolved file map
     let file_map =
@@ -92,15 +100,6 @@ pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
         // config.add_files(files);
         config.global.included_paths = Some(cli_files);
     }
-
-    let bump = if let Some(new_version) = options.new_version.as_deref() {
-        bumpversion::Bump::NewVersion(new_version)
-    } else {
-        let bump = bump
-            .as_deref()
-            .ok_or_else(|| eyre::eyre!("missing version component to bump"))?;
-        bumpversion::Bump::Component(bump)
-    };
 
     let verbosity: bumpversion::logging::Verbosity = if options.verbosity.quiet > 0 {
         bumpversion::logging::Verbosity::Off
@@ -118,8 +117,155 @@ pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
         components,
         config_file: Some(config_file_path),
     };
+
+    if let Some(command) = options.command {
+        match command {
+            options::SubCommand::Show(show_options) => {
+                return handle_show(&show_options, &manager);
+            }
+            options::SubCommand::ShowBump(show_bump_options) => {
+                return handle_show_bump(&show_bump_options, &manager);
+            }
+            _ => {}
+        }
+    }
+
+    let bump = if let Some(new_version) = options.new_version.as_deref() {
+        bumpversion::Bump::NewVersion(new_version)
+    } else {
+        let bump = bump
+            .as_deref()
+            .ok_or_else(|| eyre::eyre!("missing version component to bump"))?;
+        bumpversion::Bump::Component(bump)
+    };
+
     manager.bump(bump).await?;
 
     tracing::info!(elapsed = ?start.elapsed(), "done");
+    Ok(())
+}
+
+fn handle_show<VCS, L>(
+    options: &options::ShowOptions,
+    manager: &bumpversion::BumpVersion<VCS, L>,
+) -> eyre::Result<()>
+where
+    VCS: VersionControlSystem,
+    L: bumpversion::logging::Log,
+{
+    let current_version_serialized = manager
+        .config
+        .global
+        .current_version
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("missing current version"))?;
+
+    let parse_version_pattern = &manager.config.global.parse_version_pattern;
+    let version_spec =
+        bumpversion::version::VersionSpec::from_components(manager.components.clone());
+    let current_version = bumpversion::version::Version::parse(
+        current_version_serialized,
+        parse_version_pattern,
+        &version_spec,
+    );
+
+    let ctx: std::collections::HashMap<String, String> = bumpversion::context::get_context(
+        Some(&manager.tag_and_revision),
+        current_version.as_ref(),
+        None,
+        Some(current_version_serialized),
+        None,
+    )
+    .collect();
+
+    // Also include flatten config in the context
+    // This is a simplification; ideally we merge specific config fields
+    let files = manager
+        .file_map
+        .keys()
+        .map(|p| p.to_string_lossy().to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let extra_ctx = [("files".to_string(), files)];
+
+    let ctx: std::collections::HashMap<&str, &str> = ctx
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+        .chain(extra_ctx.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+        .collect();
+
+    for variable in &options.variables {
+        if let Some(value) = ctx.get(variable.as_str()) {
+            if options.variables.len() > 1 {
+                println!("{variable}={value}");
+            } else {
+                println!("{value}");
+            }
+        } else {
+            // Check if it's a config value
+            // This is hacky, but consistent with some python behavior
+            // For now, we only support context variables and basic config
+            tracing::warn!("variable {variable} not found in context");
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_show_bump<VCS, L>(
+    options: &options::ShowBumpOptions,
+    manager: &bumpversion::BumpVersion<VCS, L>,
+) -> eyre::Result<()>
+where
+    VCS: VersionControlSystem,
+    L: bumpversion::logging::Log,
+{
+    let component = options
+        .component
+        .as_deref()
+        .or(options.args.first().map(std::string::String::as_str))
+        .ok_or_else(|| eyre::eyre!("missing version component to bump"))?;
+
+    let current_version_serialized = manager
+        .config
+        .global
+        .current_version
+        .as_ref()
+        .ok_or_else(|| eyre::eyre!("missing current version"))?;
+
+    let parse_version_pattern = &manager.config.global.parse_version_pattern;
+    let version_spec =
+        bumpversion::version::VersionSpec::from_components(manager.components.clone());
+    let current_version = bumpversion::version::Version::parse(
+        current_version_serialized,
+        parse_version_pattern,
+        &version_spec,
+    )
+    .ok_or_else(|| eyre::eyre!("failed to parse current version"))?;
+
+    let new_version = current_version.bump(component)?;
+    let serialize_version_patterns = &manager.config.global.serialize_version_patterns;
+    
+    // We need a context to serialize
+    let ctx_without_new_version: std::collections::HashMap<String, String> =
+        bumpversion::context::get_context(
+            Some(&manager.tag_and_revision),
+            Some(&current_version),
+            None,
+            Some(current_version_serialized),
+            None,
+        )
+        .collect();
+
+    let new_version_serialized =
+        new_version.serialize(serialize_version_patterns, &ctx_without_new_version)?;
+
+    // Mimic bump-my-version output format
+    // It usually prints a list of changes or the new version details.
+    // Let's print the basic info for now.
+    println!("old_version={current_version_serialized}");
+    println!("new_version={new_version_serialized}");
+
     Ok(())
 }

@@ -5,6 +5,7 @@
 pub mod git;
 
 #[cfg(test)]
+/// Test utilities for VCS interactions.
 pub mod temp;
 
 use crate::f_string::PythonFormatString;
@@ -52,6 +53,7 @@ pub struct TagAndRevision {
 ///
 /// Implementors can open repositories, add/commit files, tag releases, and query history.
 pub trait VersionControlSystem {
+    /// Error type returned by this VCS implementation.
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Open the VCS repository at the given path.

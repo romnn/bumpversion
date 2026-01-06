@@ -4,6 +4,7 @@ use super::{
 };
 use crate::f_string::PythonFormatString;
 
+/// Per-file configuration options as parsed from configuration sources.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileConfig {
     /// Regex parsing the version string
@@ -20,6 +21,7 @@ pub struct FileConfig {
     pub ignore_missing_version: Option<bool>,
 }
 
+/// Per-file configuration options with defaults applied.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FinalizedFileConfig {
     /// Regex parsing the version string
@@ -38,6 +40,7 @@ pub struct FinalizedFileConfig {
 
 impl FileConfig {
     #[must_use]
+    /// Create an empty [`FileConfig`] with all options unset.
     pub fn empty() -> Self {
         Self {
             parse_version_pattern: None,
@@ -50,11 +53,16 @@ impl FileConfig {
     }
 }
 
+/// Default parse regex used when no explicit `parse_version_pattern` is configured.
 pub static PARSE_VERSION_REGEX: std::sync::LazyLock<Regex> = std::sync::LazyLock::new(|| {
-    regex::RegexBuilder::new(r"(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)")
+    #[expect(
+        clippy::expect_used,
+        reason = "static regex is a compile-time literal and known to be valid"
+    )]
+    let regex = regex::RegexBuilder::new(r"(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)")
         .build()
-        .unwrap()
-        .into()
+        .expect("static version parsing regex must be valid");
+    regex.into()
 });
 
 impl Default for FinalizedFileConfig {

@@ -1,6 +1,7 @@
 use crate::f_string::{MissingArgumentError, PythonFormatString};
 use std::collections::HashMap;
 
+/// Wrapper around [`regex::Regex`] with stable ordering and hashing.
 #[derive(Debug, Clone)]
 pub struct Regex(pub regex::Regex);
 
@@ -57,16 +58,22 @@ impl From<regex::Regex> for Regex {
 }
 
 #[derive(thiserror::Error, Debug, PartialEq)]
+/// Errors that can occur when formatting a [`RegexTemplate`].
 pub enum RegexTemplateError {
     #[error(transparent)]
+    /// Required template argument is missing.
     MissingArgument(#[from] MissingArgumentError),
     #[error(transparent)]
+    /// Regex compilation error.
     Regex(#[from] regex::Error),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// Template for producing regex patterns from format strings.
 pub enum RegexTemplate {
+    /// The formatted string is treated as a regex (values are escaped).
     Regex(PythonFormatString),
+    /// The formatted string is escaped so it matches literally.
     Escaped(PythonFormatString),
 }
 
@@ -86,15 +93,18 @@ impl AsRef<PythonFormatString> for RegexTemplate {
 
 impl RegexTemplate {
     #[must_use]
+    /// Returns `true` if this template produces a regex pattern.
     pub fn is_regex(&self) -> bool {
         matches!(self, Self::Regex(_))
     }
 
     #[must_use]
+    /// Returns `true` if this template produces an escaped literal pattern.
     pub fn is_escaped(&self) -> bool {
         matches!(self, Self::Escaped(_))
     }
 
+    /// Format this template using `values` and compile it into a [`regex::Regex`].
     pub fn format<K, V>(
         &self,
         values: &HashMap<K, V>,

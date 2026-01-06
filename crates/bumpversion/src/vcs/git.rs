@@ -13,25 +13,33 @@ use std::sync::LazyLock;
 /// Git VCS error type.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    /// I/O error while running git commands.
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 
+    /// UTF-8 decoding error.
     #[error("UTF-8 decode error: {0}")]
     Utf8(#[from] std::str::Utf8Error),
 
+    /// Git command execution failed.
     #[error("command failed: {0}")]
     CommandFailed(#[from] crate::command::Error),
 
+    /// Regex compilation error.
     #[error("regex error: {0}")]
     Regex(#[from] regex::Error),
 
+    /// Failed to parse tag output.
     #[error("invalid tag: {0}")]
     InvalidTag(#[from] InvalidTagError),
 
+    /// Missing argument while formatting a template.
     #[error("failed to template {format_string}")]
     MissingArgument {
+        /// Underlying missing-argument error.
         #[source]
         source: crate::f_string::MissingArgumentError,
+        /// Template that failed to format.
         format_string: PythonFormatString,
     },
 }
@@ -39,18 +47,29 @@ pub enum Error {
 /// Errors parsing git tag strings into version metadata.
 #[derive(thiserror::Error, Debug)]
 pub enum InvalidTagError {
+    /// Tag output did not include a commit SHA.
     #[error("tag {0:?} is missing commit SHA")]
     MissingCommitSha(String),
+
+    /// Tag output did not include the distance to the latest tag.
     #[error("tag {0:?} is missing distance to latest tag")]
     MissingDistanceToLatestTag(String),
+
+    /// Distance to latest tag could not be parsed.
     #[error("invalid distance to latest tag for {tag:?}")]
     InvalidDistanceToLatestTag {
+        /// Underlying parse error.
         #[source]
         source: std::num::ParseIntError,
+        /// The tag string that contained the invalid distance.
         tag: String,
     },
+
+    /// Tag output did not include the tag name.
     #[error("tag {0:?} is missing current tag")]
     MissingCurrentTag(String),
+
+    /// Tag output did not include the version string.
     #[error("tag {0:?} is missing version")]
     MissingVersion(String),
 }
@@ -63,6 +82,10 @@ pub struct GitRepository {
 }
 
 static FLAG_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
+    #[expect(
+        clippy::unwrap_used,
+        reason = "static regex pattern is a hard-coded literal and is guaranteed to be valid"
+    )]
     regex::RegexBuilder::new(r"^(\(\?[aiLmsux]+\))")
         .build()
         .unwrap()
@@ -74,11 +97,11 @@ static FLAG_PATTERN: LazyLock<regex::Regex> = LazyLock::new(|| {
 /// The tuple `(pattern_without flags, flags)`.
 fn extract_regex_flags(pattern: &str) -> (&str, &str) {
     let bits: Vec<_> = FLAG_PATTERN.split(pattern).collect();
-    if bits.len() < 2 {
-        (pattern, "")
-    } else {
-        (bits[1], bits[0])
-    }
+    let Some(pattern_without_flags) = bits.get(1).copied() else {
+        return (pattern, "");
+    };
+    let flags = bits.first().copied().unwrap_or("");
+    (pattern_without_flags, flags)
 }
 
 /// Return the version from a tag
@@ -95,24 +118,20 @@ fn get_version_from_tag<'a>(
     let version_pattern = parse_pattern.replace("\\\\", "\\");
     let (version_pattern, regex_flags) = extract_regex_flags(&version_pattern);
     let PythonFormatString(values) = tag_name;
-    let (prefix, suffix) = values
+
+    let mut prefix = String::new();
+    let mut suffix = String::new();
+    if let Some(idx) = values
         .iter()
         .position(|value| value == &Value::Argument("new_version".to_string()))
-        .map(|idx| {
-            let prefix = &values[..idx];
-            let suffix = &values[(idx + 1)..];
-            (prefix, suffix)
-        })
-        .unwrap_or_default();
-
-    let prefix = prefix.iter().fold(String::new(), |mut acc, value| {
-        acc.push_str(&value.to_string());
-        acc
-    });
-    let suffix = suffix.iter().fold(String::new(), |mut acc, value| {
-        acc.push_str(&value.to_string());
-        acc
-    });
+    {
+        for value in values.iter().take(idx) {
+            prefix.push_str(&value.to_string());
+        }
+        for value in values.iter().skip(idx + 1) {
+            suffix.push_str(&value.to_string());
+        }
+    }
 
     let pattern = format!(
         "{regex_flags}{}(?P<current_version>{version_pattern}){}",
@@ -128,7 +147,12 @@ fn get_version_from_tag<'a>(
     Ok(version)
 }
 
+/// Regex used to remove non-alphanumeric characters from branch names.
 pub static BRANCH_NAME_REGEX: LazyLock<regex::Regex> = LazyLock::new(|| {
+    #[expect(
+        clippy::unwrap_used,
+        reason = "static regex pattern is a hard-coded literal and is guaranteed to be valid"
+    )]
     regex::RegexBuilder::new(r"([^a-zA-Z0-9]*)")
         .build()
         .unwrap()
@@ -407,7 +431,6 @@ mod tests {
             regex::RegexBuilder::new(r"(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)").build()?;
         let tag_name = PythonFormatString::parse("v{new_version}")?;
         let version = super::get_version_from_tag("v2.1.4", &tag_name, &regex_pattern)?;
-        dbg!(&version);
         sim_assert_eq!(version, Some("2.1.4"));
         Ok(())
     }
@@ -446,9 +469,7 @@ mod tests {
             .await?;
         similar_asserts::assert_eq!(repo.dirty_files().await?.len(), 0);
 
-        for (tag, previous) in tags[1..].iter().zip(&tags) {
-            dbg!(previous);
-            dbg!(tag);
+        for (_tag, _previous) in tags.iter().skip(1).zip(&tags) {
             // let latest = repo.latest_tag_info(None)?.map(|t| t.current_version);
             // let previous = previous.map(|t| t.0.to_string());
             // similar_asserts::assert_eq!(&previous, &latest);
@@ -489,12 +510,19 @@ mod tests {
         similar_asserts::assert_eq!(repo.dirty_files().await?.len(), 0);
 
         // track first file
-        repo.add(&dirty_files[0..1]).await?;
-        sim_assert_eq_sorted!(repo.dirty_files().await?, dirty_files[0..1]);
+        let first_dirty_file = dirty_files
+            .first()
+            .ok_or_else(|| eyre::eyre!("expected at least one dirty file"))?
+            .clone();
+        let mut expected_first_dirty_files = vec![first_dirty_file];
+        repo.add(expected_first_dirty_files.as_slice()).await?;
+        let mut actual_dirty_files = repo.dirty_files().await?;
+        sim_assert_eq_sorted!(actual_dirty_files, expected_first_dirty_files);
 
         // track all files
         repo.add(&dirty_files).await?;
-        sim_assert_eq_sorted!(repo.dirty_files().await?, dirty_files);
+        let mut actual_dirty_files = repo.dirty_files().await?;
+        sim_assert_eq_sorted!(actual_dirty_files, dirty_files);
         Ok(())
     }
 }

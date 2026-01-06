@@ -1,3 +1,5 @@
+//! `bumpversion` CLI binary entrypoint.
+
 #![forbid(unsafe_code)]
 
 mod common;
