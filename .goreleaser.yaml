@@ -13,6 +13,8 @@ homebrew_casks:
     ids:
       - cargo-bumpversion
     description: "Plugin for `cargo` to update all version strings in your project and optionally commit and tag the changes"
+    custom_block: |
+      os macos: "darwin", linux: "linux"
     directory: Casks
     commit_author:
       name: romnn
@@ -34,6 +36,8 @@ homebrew_casks:
     ids:
       - bumpversion
     description: "Update all version strings in your project and optionally commit and tag the changes"
+    custom_block: |
+      os macos: "darwin", linux: "linux"
     directory: Casks
     commit_author:
       name: romnn
