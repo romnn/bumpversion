@@ -22,8 +22,10 @@
 //! let printer = Printer::stderr(None);
 //!
 //! // find and parse configuration
+//! // `None` searches the default candidate names; `Some(path)` reads just that file
 //! let (config_file, mut config) = bumpversion::find_config(
 //!   &repo_path,
+//!   None,
 //!   &Default::default(),
 //!   &printer,
 //! ).await?.unwrap();
@@ -101,11 +103,15 @@ pub enum Bump<'a> {
 
 /// Find config file in one of the default config file locations.
 ///
+/// When `config_file` is given, only that file is considered and the usual
+/// candidate list in `dir` is skipped entirely.
+///
 /// # Errors
 ///
 /// Returns [`config::Error`] if a discovered configuration file cannot be read or parsed.
 pub async fn find_config<W>(
     dir: &Path,
+    config_file: Option<&Path>,
     config_overrides: &config::GlobalConfig,
     printer: &diagnostics::Printer<W>,
 ) -> Result<Option<(config::ConfigFile, config::FinalizedConfig)>, config::Error>
@@ -114,7 +120,10 @@ where
     // W: codespan_reporting::term::termcolor::WriteColor + Send + Sync + 'static,
 {
     use diagnostics::ToDiagnostics;
-    let config_files = config::config_file_locations(dir);
+    let config_files: Vec<config::ConfigFile> = match config_file {
+        Some(path) => vec![config::ConfigFile::from_path(path)],
+        None => config::config_file_locations(dir).collect(),
+    };
 
     let config_files = futures::stream::iter(config_files)
         .then(|config_file| async move {
@@ -395,10 +404,24 @@ where
                 .log_modification(config_file.path(), modification);
         }
 
+        // The tag this bump is about to create, so hooks see the new name rather
+        // than the one already on the repository. `None` when tagging is off.
+        let new_version_tag = if self.config.global.tag {
+            Some(
+                self.config
+                    .global
+                    .tag_name
+                    .format(&ctx_with_new_version, true)?,
+            )
+        } else {
+            None
+        };
+
         self.run_pre_commit_hooks(
             Some(&current_version),
             Some(&new_version),
             &new_version_serialized,
+            new_version_tag.as_deref(),
         )
         .await?;
 
@@ -432,6 +455,7 @@ where
             Some(&current_version),
             Some(&new_version),
             &new_version_serialized,
+            new_version_tag.as_deref(),
         )
         .await?;
 
@@ -586,7 +610,6 @@ where
                         self.config.global.dry_run,
                     )
                     .await
-                    .map_err(files::ReplaceVersionError::from)
                 }
                 config::ConfigFile::PyProject(_) | config::ConfigFile::BumpversionToml(_) => {
                     config::toml::replace_version(

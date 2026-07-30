@@ -92,6 +92,27 @@ pub enum ConfigFile {
 }
 
 impl ConfigFile {
+    /// Classify an explicitly named config file by its file name.
+    ///
+    /// Discovery infers the format from the fixed candidate names, but a path
+    /// given with `--config-file` can be called anything, so the format has to be
+    /// derived here. A `.cfg` extension means the INI layout; anything else is
+    /// read as TOML with a `[tool.bumpversion]` table, which is the format a file
+    /// named for this tool would use.
+    #[must_use]
+    pub fn from_path(path: &Path) -> Self {
+        let path_buf = path.to_path_buf();
+        match path.file_name().and_then(std::ffi::OsStr::to_str) {
+            Some("pyproject.toml") => Self::PyProject(path_buf),
+            Some("setup.cfg") => Self::SetupCfg(path_buf),
+            Some("Cargo.toml") => Self::CargoToml(path_buf),
+            _ => match path.extension().and_then(std::ffi::OsStr::to_str) {
+                Some("cfg" | "ini") => Self::BumpversionCfg(path_buf),
+                _ => Self::BumpversionToml(path_buf),
+            },
+        }
+    }
+
     #[must_use]
     /// Return the path of this config file.
     pub fn path(&self) -> &Path {

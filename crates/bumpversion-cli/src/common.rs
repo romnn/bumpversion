@@ -48,9 +48,23 @@ pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
     let printer = bumpversion::diagnostics::Printer::stderr(color_choice.into());
 
     let cli_overrides = options::global_cli_config(&options)?;
-    let (config_file_path, mut config) = bumpversion::find_config(&dir, &cli_overrides, &printer)
-        .await?
-        .ok_or(eyre::eyre!("missing config file"))?;
+    // An explicitly named config file is resolved relative to the working
+    // directory, not `--dir`, so `--dir sub --config-file my.toml` behaves the way
+    // a shell path does.
+    let config_file = options.config_file.as_deref();
+    if let Some(path) = config_file {
+        eyre::ensure!(path.is_file(), "config file {path:?} does not exist");
+    }
+    let (config_file_path, mut config) =
+        bumpversion::find_config(&dir, config_file, &cli_overrides, &printer)
+            .await?
+            .ok_or_else(|| {
+                if let Some(path) = config_file {
+                    eyre::eyre!("no bumpversion configuration found in {path:?}")
+                } else {
+                    eyre::eyre!("missing config file")
+                }
+            })?;
 
     let components = config::version::version_component_configs(&config);
     let (bump, cli_files) = options::parse_positional_arguments(&mut options, &components)?;

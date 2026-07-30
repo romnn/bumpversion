@@ -291,11 +291,33 @@ pub(crate) fn parse_part_config(
         .transpose()?
         .unwrap_or_default();
 
+    let first_value = value
+        .remove_option("first_value")
+        .and_then(as_optional)
+        .map(ini::Spanned::into_inner);
+    let always_increment = value
+        .remove_option("always_increment")
+        .as_ref()
+        .map(as_bool)
+        .transpose()?
+        .unwrap_or_default();
+    let calver_format = value
+        .remove_option("calver_format")
+        .and_then(as_optional)
+        .map(ini::Spanned::into_inner);
+    let depends_on = value
+        .remove_option("depends_on")
+        .and_then(as_optional)
+        .map(ini::Spanned::into_inner);
+
     Ok(VersionComponentSpec {
         independent,
         optional_value,
         values,
-        ..VersionComponentSpec::default()
+        first_value,
+        always_increment,
+        calver_format,
+        depends_on,
     })
 }
 
@@ -647,22 +669,6 @@ impl config::Config {
     }
 }
 
-static CONFIG_CURRENT_VERSION_REGEX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(
-    || {
-        #[expect(
-            clippy::expect_used,
-            reason = "static regex is a compile-time literal and known to be valid"
-        )]
-        let regex = regex::RegexBuilder::new(
-            r"(?P<section_prefix>\\[bumpversion]\n[^\[]*current_version\\s*=\\s*)(?P<version>\{current_version\})",
-        )
-        .multi_line(true)
-        .build()
-        .expect("static current_version replacement regex must be valid");
-        regex
-    },
-);
-
 /// Update the `current_version` key in the configuration file.
 ///
 /// Instead of parsing and re-writing the config file with new information,
@@ -673,46 +679,105 @@ static CONFIG_CURRENT_VERSION_REGEX: std::sync::LazyLock<regex::Regex> = std::sy
 /// # Errors
 ///
 /// Returns [`IoError`] if the configuration file cannot be read or updated.
-pub async fn replace_version<K, V, S>(
+/// The section name holding the global configuration in both INI layouts.
+const GLOBAL_SECTION: &str = "bumpversion";
+
+/// Return the section name of an INI section header line, if it is one.
+fn section_name(line: &str) -> Option<&str> {
+    let trimmed = line.trim();
+    let inner = trimmed.strip_prefix('[')?;
+    let end = inner.find(']')?;
+    inner.get(..end).map(str::trim)
+}
+
+/// Return the key of an INI `key = value` line, if it is one.
+///
+/// Both `=` and `:` are accepted as assignment delimiters, matching the parser,
+/// and full-line comments are skipped.
+fn assignment_key(line: &str) -> Option<&str> {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with('#') || trimmed.starts_with(';') {
+        return None;
+    }
+    let delimiter = trimmed.find(['=', ':'])?;
+    trimmed.get(..delimiter).map(str::trim)
+}
+
+/// Rewrite `current_version` in the `[bumpversion]` section of an INI document.
+///
+/// This edits the text rather than round-tripping through the parser: the parser
+/// is span-based and read-only, and a textual edit preserves comments, key order,
+/// and the original spacing exactly. The substitution is confined to the one
+/// `current_version` line inside the global section, so a version string that
+/// also appears elsewhere in the file is untouched.
+///
+/// Returns `None` when there is nothing to rewrite.
+fn replace_current_version(
+    before: &str,
+    search: &regex::Regex,
+    replacement: &str,
+) -> Option<String> {
+    let mut after = String::with_capacity(before.len());
+    let mut in_global_section = false;
+    let mut replaced = false;
+
+    // `split_inclusive` keeps each line's terminator, so a file with CRLF endings
+    // or no trailing newline is reproduced byte for byte.
+    for line in before.split_inclusive('\n') {
+        if let Some(name) = section_name(line) {
+            in_global_section = name == GLOBAL_SECTION;
+        } else if in_global_section
+            && !replaced
+            && assignment_key(line).is_some_and(|key| key == "current_version")
+        {
+            let updated = search.replace(line, replacement);
+            replaced = updated != line;
+            after.push_str(&updated);
+            continue;
+        }
+        after.push_str(line);
+    }
+
+    replaced.then_some(after)
+}
+
+/// Update the `current_version` key in an INI configuration file.
+///
+/// Crate-internal, matching [`super::toml::replace_version`]: both are driven by
+/// the bump itself rather than called directly.
+///
+/// # Errors
+///
+/// Returns [`files::ReplaceVersionError`] if the file cannot be read or written,
+/// or if the search or replace template cannot be rendered.
+pub(crate) async fn replace_version<K, V>(
     path: &Path,
-    _config: &config::FinalizedConfig,
-    _ctx: &HashMap<K, V, S>,
+    config: &config::FinalizedConfig,
+    ctx: &HashMap<K, V>,
     dry_run: bool,
-) -> Result<Option<files::Modification>, IoError>
+) -> Result<Option<files::Modification>, files::ReplaceVersionError>
 where
     K: std::borrow::Borrow<str> + std::hash::Hash + Eq + std::fmt::Debug,
     V: AsRef<str> + std::fmt::Debug,
-    S: std::hash::BuildHasher,
 {
+    tracing::info!(config = ?path, "processing config file");
+
     let as_io_error = |source: std::io::Error| -> IoError { IoError::new(source, path) };
     let before = tokio::fs::read_to_string(path).await.map_err(as_io_error)?;
-    // let extension = path.extension().and_then(|ext| ext.to_str());
-    let _matches = CONFIG_CURRENT_VERSION_REGEX.find_iter(&before);
-    // let new_config = if extension == Some("cfg") && matches.count() > 0 {
 
-    // let new_config = if matches.count() > 0 {
-    //     let replacement = format!(r#"\g<section_prefix>{new_version}"#);
-    //     CONFIG_CURRENT_VERSION_REGEX.replace_all(&existing_config, replacement)
-    // } else {
-    //     tracing::info!("could not find current version ({current_version}) in {path:?}");
-    //     return Ok(None);
-    // };
+    let search_pattern = &config.global.search;
+    let search_regex = search_pattern.format(ctx, true)?;
+    let replace_pattern = &config.global.replace;
+    let replacement = PythonFormatString::parse(replace_pattern)?.format(ctx, true)?;
 
-    // if dry_run {
-    //     tracing::info!("Would write to config file {path:?}");
-    // } else {
-    //     tracing::info!("Writing to config file {path:?}");
-    // }
-
-    // let label_existing = format!("{path:?} (before)");
-    // let label_new = format!("{path:?} (after)");
-    // let diff = similar_asserts::SimpleDiff::from_str(
-    //     &existing_config,
-    //     &new_config,
-    //     &label_existing,
-    //     &label_new,
-    // );
-    let after = before.clone();
+    let Some(after) = replace_current_version(&before, &search_regex, &replacement) else {
+        tracing::info!(?path, "could not find current_version in the config file");
+        return Ok(Some(files::Modification {
+            after: before.clone(),
+            before,
+            replacements: vec![],
+        }));
+    };
 
     if !dry_run {
         use tokio::io::AsyncWriteExt;
@@ -733,7 +798,12 @@ where
     let modification = files::Modification {
         before,
         after,
-        replacements: vec![],
+        replacements: vec![files::Replacement {
+            search_pattern: search_pattern.to_string(),
+            search: search_regex.as_str().to_string(),
+            replace_pattern: replace_pattern.clone(),
+            replace: replacement,
+        }],
     };
     Ok(Some(modification))
 }

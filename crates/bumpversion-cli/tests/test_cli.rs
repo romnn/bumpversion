@@ -19,6 +19,47 @@ fn usage(subcommand: &str) -> String {
     format!("Usage: {bin} {subcommand}")
 }
 
+/// A `.bumpversion.toml` at `1.2.3` with `commit` and `tag` enabled, in a fresh
+/// repository — the shape that made the `cargo-bumpversion` argument bug
+/// destructive rather than merely wrong.
+fn armed_repo() -> eyre::Result<tempfile::TempDir> {
+    let temp = tempfile::tempdir()?;
+    fs::write(
+        temp.path().join(".bumpversion.toml"),
+        r#"
+[tool.bumpversion]
+current_version = "1.2.3"
+commit = true
+tag = true
+
+[[tool.bumpversion.files]]
+filename = "VERSION"
+"#,
+    )?;
+    fs::write(temp.path().join("VERSION"), "1.2.3")?;
+    git_init(temp.path())?;
+    Ok(temp)
+}
+
+/// Assert the repository is exactly as `armed_repo` left it.
+fn assert_untouched(dir: &Path) -> eyre::Result<()> {
+    assert_eq!(fs::read_to_string(dir.join("VERSION"))?, "1.2.3");
+    assert!(
+        fs::read_to_string(dir.join(".bumpversion.toml"))?.contains(r#"current_version = "1.2.3""#),
+        "config version must not have changed"
+    );
+    let tags = std::process::Command::new("git")
+        .args(["tag", "-l"])
+        .current_dir(dir)
+        .output()?;
+    assert!(
+        tags.stdout.is_empty(),
+        "no tag may have been created, found: {}",
+        String::from_utf8_lossy(&tags.stdout)
+    );
+    Ok(())
+}
+
 fn git_init(dir: &Path) -> eyre::Result<()> {
     let output = std::process::Command::new("git")
         .arg("init")
@@ -44,6 +85,442 @@ fn test_show_bump_help() {
     cmd.assert()
         .success()
         .stdout(predicate::str::contains(usage("show-bump")));
+}
+
+/// `cargo-bumpversion --help` must print help. It used to fall through to the
+/// bump path, and in a repository with `commit`/`tag` enabled that committed and
+/// tagged a real release.
+#[test]
+fn test_cargo_bumpversion_help_does_not_bump() -> eyre::Result<()> {
+    let temp = armed_repo()?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_cargo-bumpversion"));
+    cmd.current_dir(temp.path()).arg("--help");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Usage:"));
+
+    assert_untouched(temp.path())
+}
+
+/// The exact invocation that caused the incident: cargo execs this binary as
+/// `cargo-bumpversion bumpversion show-bump major`. `show-bump` is read-only and
+/// must stay read-only.
+#[test]
+fn test_cargo_subcommand_show_bump_is_read_only() -> eyre::Result<()> {
+    let temp = armed_repo()?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_cargo-bumpversion"));
+    cmd.current_dir(temp.path())
+        .arg("bumpversion")
+        .arg("show-bump")
+        .arg("major");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("old_version=1.2.3"))
+        .stdout(predicate::str::contains("new_version=2.0.0"));
+
+    assert_untouched(temp.path())
+}
+
+/// The same command invoked directly, without cargo's injected subcommand name.
+#[test]
+fn test_cargo_bumpversion_direct_show_bump_is_read_only() -> eyre::Result<()> {
+    let temp = armed_repo()?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_cargo-bumpversion"));
+    cmd.current_dir(temp.path()).arg("show-bump").arg("major");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("new_version=2.0.0"));
+
+    assert_untouched(temp.path())
+}
+
+/// Both invocation styles must reach the same parse, so a real bump still works.
+#[test]
+fn test_cargo_subcommand_bump_matches_direct_invocation() -> eyre::Result<()> {
+    for prefix in [vec!["bumpversion"], vec![]] {
+        let temp = armed_repo()?;
+
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_cargo-bumpversion"));
+        cmd.current_dir(temp.path())
+            .args(prefix)
+            .arg("bump")
+            .arg("patch")
+            .arg("--allow-dirty")
+            .arg("--no-commit")
+            .arg("--no-tag");
+        cmd.assert().success();
+
+        assert_eq!(fs::read_to_string(temp.path().join("VERSION"))?, "1.2.4");
+    }
+    Ok(())
+}
+
+/// With no component and no `--new-version`, both binaries must refuse rather
+/// than guess.
+#[test]
+fn test_cargo_subcommand_without_component_fails() -> eyre::Result<()> {
+    let temp = armed_repo()?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_cargo-bumpversion"));
+    cmd.current_dir(temp.path()).arg("bumpversion");
+    cmd.assert().failure().stderr(predicate::str::contains(
+        "missing version component to bump",
+    ));
+
+    assert_untouched(temp.path())
+}
+
+/// Write `contents` to `name` in a fresh repository.
+fn repo_with(name: &str, contents: &str) -> eyre::Result<tempfile::TempDir> {
+    let temp = tempfile::tempdir()?;
+    fs::write(temp.path().join(name), contents)?;
+    git_init(temp.path())?;
+    Ok(temp)
+}
+
+/// `--config-file` was parsed and then never read, so a config under any
+/// non-default name was silently ignored.
+#[test]
+fn test_config_file_flag_selects_the_file() -> eyre::Result<()> {
+    let temp = repo_with(
+        "custom-release.toml",
+        "[tool.bumpversion]\ncurrent_version = \"9.9.9\"\n",
+    )?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path())
+        .args(["--config-file", "custom-release.toml"])
+        .args(["show", "current_version"]);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("9.9.9"));
+
+    // Without the flag there is no config file to discover at all.
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path())
+        .args(["show", "current_version"]);
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("missing config file"));
+    Ok(())
+}
+
+/// A path that does not exist must be reported, not silently fall back to
+/// discovery.
+#[test]
+fn test_config_file_flag_rejects_a_missing_file() -> eyre::Result<()> {
+    let temp = repo_with(
+        ".bumpversion.toml",
+        "[tool.bumpversion]\ncurrent_version = \"1.2.3\"\n",
+    )?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path())
+        .args(["--config-file", "nope.toml"])
+        .args(["show", "current_version"]);
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("does not exist"));
+    Ok(())
+}
+
+/// A repository whose `VERSION` file needs a regex to match.
+fn regex_search_repo() -> eyre::Result<tempfile::TempDir> {
+    let temp = tempfile::tempdir()?;
+    fs::write(
+        temp.path().join(".bumpversion.toml"),
+        r#"
+[tool.bumpversion]
+current_version = "1.0.0"
+
+[[tool.bumpversion.files]]
+filename = "VERSION"
+"#,
+    )?;
+    fs::write(temp.path().join("VERSION"), "version = \"1.0.0\"\n")?;
+    git_init(temp.path())?;
+    Ok(temp)
+}
+
+const REGEX_SEARCH: &str = r#"version = "[0-9]+\.[0-9]+\.[0-9]+""#;
+const REGEX_REPLACE: &str = r#"version = "{new_version}""#;
+
+/// `--regex` had no effect at all; the search was always matched literally.
+#[test]
+fn test_regex_flag_enables_regex_search() -> eyre::Result<()> {
+    let temp = regex_search_repo()?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path())
+        .args(["--no-commit", "--no-tag", "--regex"])
+        .args(["--search", REGEX_SEARCH])
+        .args(["--replace", REGEX_REPLACE])
+        .args(["bump", "patch"]);
+    cmd.assert().success();
+
+    assert_eq!(
+        fs::read_to_string(temp.path().join("VERSION"))?,
+        "version = \"1.0.1\"\n"
+    );
+    Ok(())
+}
+
+/// The same search without `--regex` is a literal string, so it matches nothing.
+#[test]
+fn test_no_regex_treats_search_literally() -> eyre::Result<()> {
+    let temp = regex_search_repo()?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path())
+        .args(["--no-commit", "--no-tag", "--no-regex"])
+        .args(["--search", REGEX_SEARCH])
+        .args(["--replace", REGEX_REPLACE])
+        .args(["bump", "patch"]);
+    let _ = cmd.assert();
+
+    assert_eq!(
+        fs::read_to_string(temp.path().join("VERSION"))?,
+        "version = \"1.0.0\"\n",
+        "a literal search must not match"
+    );
+    Ok(())
+}
+
+/// `--allow-dirty` used to be what actually selected regex mode, so an unrelated
+/// flag changed how `search` was interpreted.
+#[test]
+fn test_allow_dirty_does_not_enable_regex() -> eyre::Result<()> {
+    let temp = regex_search_repo()?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path())
+        .args(["--no-commit", "--no-tag", "--allow-dirty"])
+        .args(["--search", REGEX_SEARCH])
+        .args(["--replace", REGEX_REPLACE])
+        .args(["bump", "patch"]);
+    let _ = cmd.assert();
+
+    assert_eq!(
+        fs::read_to_string(temp.path().join("VERSION"))?,
+        "version = \"1.0.0\"\n",
+        "--allow-dirty must not imply --regex"
+    );
+    Ok(())
+}
+
+/// `--tag-message` took its value from `--tag-name`, so the tag message could
+/// never be set from the command line.
+#[test]
+fn test_tag_message_is_independent_of_tag_name() -> eyre::Result<()> {
+    let temp = repo_with(
+        ".bumpversion.toml",
+        "[tool.bumpversion]\ncurrent_version = \"1.0.0\"\n",
+    )?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path())
+        .args(["--dry-run", "-v", "--tag"])
+        .args(["--tag-name", "rel-{new_version}"])
+        .args(["--tag-message", "shipping {new_version}"])
+        .args(["bump", "minor"]);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("tag = rel-1.1.0"))
+        .stdout(predicate::str::contains("message = shipping 1.1.0"));
+    Ok(())
+}
+
+/// The INI writeback was a stub that rewrote the file unchanged, so a `.cfg`
+/// config kept reporting the old version and the next bump repeated it.
+#[test]
+fn test_ini_config_updates_current_version() -> eyre::Result<()> {
+    let temp = tempfile::tempdir()?;
+    fs::write(
+        temp.path().join(".bumpversion.cfg"),
+        "[bumpversion]\ncurrent_version = 2.1.0\n\n[bumpversion:file:VERSION]\n",
+    )?;
+    fs::write(temp.path().join("VERSION"), "2.1.0")?;
+    git_init(temp.path())?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path())
+        .args(["--allow-dirty", "--no-commit", "--no-tag"])
+        .args(["bump", "patch"]);
+    cmd.assert().success();
+
+    assert_eq!(fs::read_to_string(temp.path().join("VERSION"))?, "2.1.1");
+    let config = fs::read_to_string(temp.path().join(".bumpversion.cfg"))?;
+    assert!(
+        config.contains("current_version = 2.1.1"),
+        "the INI config must record the new version, got:\n{config}"
+    );
+    assert!(
+        config.contains("[bumpversion:file:VERSION]"),
+        "the rest of the file must be preserved, got:\n{config}"
+    );
+    Ok(())
+}
+
+/// `RUST_LOG` was passed to `with_env_var`, which expects a variable *name*, so
+/// every setting failed to resolve and fell back to the defaults.
+#[test]
+fn test_rust_log_env_var_is_honored() -> eyre::Result<()> {
+    let temp = repo_with(
+        ".bumpversion.toml",
+        "[tool.bumpversion]\ncurrent_version = \"1.2.3\"\n",
+    )?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path())
+        .env("RUST_LOG", "bumpversion=debug")
+        .args(["show", "current_version"]);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("DEBUG"))
+        .stderr(predicate::str::contains("invalid log filter").not());
+    Ok(())
+}
+
+/// `first_value` was never read from the config, so a reset always went to the
+/// first entry of `values` (or `0`) and could not be pointed elsewhere.
+#[test]
+fn test_parts_first_value_is_read() -> eyre::Result<()> {
+    let temp = repo_with(
+        ".bumpversion.toml",
+        r#"
+[tool.bumpversion]
+current_version = "1.2.3"
+
+[tool.bumpversion.parts.patch]
+first_value = "1"
+"#,
+    )?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path()).args(["show-bump", "minor"]);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("new_version=1.3.1"));
+    Ok(())
+}
+
+/// The idiomatic pre-release ladder: with `first_value` set to the optional
+/// value, a component bump collapses the suffix instead of reopening it.
+#[test]
+fn test_parts_first_value_collapses_a_pre_release() -> eyre::Result<()> {
+    let temp = repo_with(
+        ".bumpversion.toml",
+        r#"
+[tool.bumpversion]
+current_version = "1.2.0-alpha.1"
+parse = '(?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(\-(?P<pre_label>[a-z]+)\.(?P<pre_n>\d+))?'
+serialize = [
+  "{major}.{minor}.{patch}-{pre_label}.{pre_n}",
+  "{major}.{minor}.{patch}",
+]
+
+[tool.bumpversion.parts.pre_label]
+values = ["alpha", "beta", "rc", "final"]
+optional_value = "final"
+first_value = "final"
+"#,
+    )?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path()).args(["show-bump", "patch"]);
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("new_version=1.2.1"));
+    Ok(())
+}
+
+/// Configure a git identity and commit everything, so the repository is in the
+/// state a real bump runs against: a clean tree of tracked files. `git add
+/// --update` only stages files git already knows about, so a bump that commits
+/// cannot work in a repository that has never committed.
+fn git_commit_all(dir: &Path) -> eyre::Result<()> {
+    for (key, value) in [
+        ("user.email", "test@example.com"),
+        ("user.name", "test"),
+        ("commit.gpgsign", "false"),
+    ] {
+        let output = std::process::Command::new("git")
+            .args(["config", key, value])
+            .current_dir(dir)
+            .output()?;
+        eyre::ensure!(output.status.success(), "failed to configure git");
+    }
+    for args in [vec!["add", "-A"], vec!["commit", "-m", "initial commit"]] {
+        let output = std::process::Command::new("git")
+            .args(&args)
+            .current_dir(dir)
+            .output()?;
+        eyre::ensure!(
+            output.status.success(),
+            "failed to run git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    Ok(())
+}
+
+/// Hook scripts were shlex-split before being handed to `sh -c`, which takes the
+/// whole script as one argument — so only the first word ran and the rest became
+/// positional parameters. Any hook with arguments or a redirect did nothing.
+#[test]
+fn test_hooks_run_the_whole_script() -> eyre::Result<()> {
+    let temp = repo_with(
+        ".bumpversion.toml",
+        r#"
+[tool.bumpversion]
+current_version = "1.0.0"
+commit = true
+tag = true
+pre_commit_hooks = ["echo pre > pre.txt"]
+post_commit_hooks = ["echo post > post.txt"]
+"#,
+    )?;
+    git_commit_all(temp.path())?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path()).args(["bump", "minor"]);
+    cmd.assert().success();
+
+    assert_eq!(fs::read_to_string(temp.path().join("pre.txt"))?, "pre\n");
+    assert_eq!(fs::read_to_string(temp.path().join("post.txt"))?, "post\n");
+    Ok(())
+}
+
+/// `BVHOOK_NEW_VERSION_TAG` carried the tag already on the repository instead of
+/// the one the bump was about to create.
+#[test]
+fn test_hook_sees_the_tag_being_created() -> eyre::Result<()> {
+    let temp = repo_with(
+        ".bumpversion.toml",
+        r#"
+[tool.bumpversion]
+current_version = "1.0.0"
+commit = true
+tag = true
+tag_name = "rel-{new_version}"
+post_commit_hooks = ['echo "$BVHOOK_NEW_VERSION_TAG" > saw.txt']
+"#,
+    )?;
+    git_commit_all(temp.path())?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path()).args(["bump", "minor"]);
+    cmd.assert().success();
+
+    assert_eq!(
+        fs::read_to_string(temp.path().join("saw.txt"))?.trim(),
+        "rel-1.1.0",
+        "the hook must see the tag being created, not the previous one"
+    );
+    Ok(())
 }
 
 #[test]

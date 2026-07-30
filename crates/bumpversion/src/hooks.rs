@@ -86,6 +86,9 @@ fn new_version_env<'a>(
             format!("{ENV_PREFIX}NEW_VERSION"),
             new_version_serialized.to_string(),
         ),
+        // The tag the bump is about to create, rendered from `tag_name`. Empty when
+        // tagging is disabled — a hook that needs a name regardless should build one
+        // from `NEW_VERSION`.
         (
             format!("{ENV_PREFIX}NEW_VERSION_TAG"),
             tag.unwrap_or_default().to_string(),
@@ -111,17 +114,14 @@ fn pre_and_post_commit_hook_env<'a>(
     current_version: Option<&'a Version>,
     new_version: Option<&'a Version>,
     new_version_serialized: &str,
+    new_version_tag: Option<&str>,
 ) -> impl Iterator<Item = (String, String)> + use<'a> {
-    let tag = tag_and_revision
-        .tag
-        .as_ref()
-        .map(|tag| tag.current_tag.as_str());
     std::env::vars()
         .chain(base_env())
         .chain(vcs_env(tag_and_revision))
         .chain(version_env(current_version, "CURRENT_"))
         .chain(version_env(new_version, "NEW_"))
-        .chain(new_version_env(new_version_serialized, tag))
+        .chain(new_version_env(new_version_serialized, new_version_tag))
 }
 
 impl<VCS, L> crate::BumpVersion<VCS, L>
@@ -157,12 +157,14 @@ where
         current_version: Option<&Version>,
         new_version: Option<&Version>,
         new_version_serialized: &str,
+        new_version_tag: Option<&str>,
     ) -> Result<(), Error> {
         let env = pre_and_post_commit_hook_env(
             &self.tag_and_revision,
             current_version,
             new_version,
             new_version_serialized,
+            new_version_tag,
         );
 
         let pre_commit_hooks = &self.config.global.pre_commit_hooks;
@@ -186,12 +188,14 @@ where
         current_version: Option<&Version>,
         new_version: Option<&Version>,
         new_version_serialized: &str,
+        new_version_tag: Option<&str>,
     ) -> Result<(), Error> {
         let env = pre_and_post_commit_hook_env(
             &self.tag_and_revision,
             current_version,
             new_version,
             new_version_serialized,
+            new_version_tag,
         );
 
         let post_commit_hooks = &self.config.global.post_commit_hooks;
@@ -224,9 +228,15 @@ async fn run_hook(
     working_dir: &Path,
     env: &HashMap<String, String>,
 ) -> Result<Output, Error> {
-    let args = shlex::split(script).ok_or_else(|| Error::Shell(script.to_string()))?;
+    // Validate the quoting up front so an unbalanced quote is a clear error rather
+    // than a shell syntax failure.
+    shlex::split(script).ok_or_else(|| Error::Shell(script.to_string()))?;
     let mut cmd = Command::new("sh");
-    cmd.args(["-c".to_string()].into_iter().chain(args));
+    // `sh -c` takes the whole script as one argument. Passing the split tokens
+    // instead made only the first word the script and turned the rest into
+    // positional parameters, so `echo hi` ran `echo` with `$0` set to `hi` and
+    // printed an empty line.
+    cmd.args(["-c", script]);
     cmd.envs(env);
     cmd.current_dir(working_dir);
     let output = command::run_command(&mut cmd).await?;

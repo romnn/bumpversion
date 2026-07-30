@@ -323,6 +323,32 @@ pub fn as_str<'de>(value: &'de toml::Value<'de>) -> Result<&'de str, ParseError>
 }
 
 #[inline]
+/// Parse a component value from a TOML value, accepting an integer.
+///
+/// Component values are strings internally, but a numeric component is naturally
+/// written unquoted — `first_value = 1` — and `bump-my-version` accepts that, so
+/// an integer is coerced rather than rejected.
+///
+/// # Errors
+///
+/// Returns [`ParseError::UnexpectedType`] if the value is neither a string nor an
+/// integer.
+pub fn as_component_value<'de>(value: &'de toml::Value<'de>) -> Result<String, ParseError> {
+    if let Some(value) = value.as_str() {
+        return Ok(value.to_string());
+    }
+    value
+        .as_integer()
+        .map(|value| value.to_string())
+        .ok_or_else(|| ParseError::UnexpectedType {
+            message: "expected a string or integer".to_string(),
+            expected: vec![ValueKind::String, ValueKind::Integer],
+            found: value.into(),
+            span: value.span.into(),
+        })
+}
+
+#[inline]
 /// Parse a boolean from a TOML value.
 ///
 /// # Errors
@@ -384,18 +410,35 @@ pub(crate) fn parse_part_config<'de>(
         span: value.span.into(),
     })?;
     let independent = table.get("independent").map(as_bool).transpose()?;
-    let optional_value = table.get("optional_value").map(as_string).transpose()?;
+    let optional_value = table
+        .get("optional_value")
+        .map(as_component_value)
+        .transpose()?;
     let values = table
         .get("values")
         .map(as_string_array)
         .transpose()?
         .unwrap_or_default();
+    let first_value = table
+        .get("first_value")
+        .map(as_component_value)
+        .transpose()?;
+    let always_increment = table
+        .get("always_increment")
+        .map(as_bool)
+        .transpose()?
+        .unwrap_or_default();
+    let calver_format = table.get("calver_format").map(as_string).transpose()?;
+    let depends_on = table.get("depends_on").map(as_string).transpose()?;
 
     Ok(VersionComponentSpec {
         independent,
         optional_value,
         values,
-        ..VersionComponentSpec::default()
+        first_value,
+        always_increment,
+        calver_format,
+        depends_on,
     })
 }
 

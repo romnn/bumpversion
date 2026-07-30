@@ -820,7 +820,7 @@ mod tests {
                 (
                     "pre_n".to_string(),
                     VersionComponentSpec {
-                        // first_value: Some(1),
+                        first_value: Some("1".to_string()),
                         ..VersionComponentSpec::default()
                     },
                 ),
@@ -834,14 +834,13 @@ mod tests {
                 (
                     "post_n".to_string(),
                     VersionComponentSpec {
-                        // first_value: Some(1),
+                        first_value: Some("1".to_string()),
                         ..VersionComponentSpec::default()
                     },
                 ),
                 (
                     "dev_label".to_string(),
                     VersionComponentSpec {
-                        // first_value: Some(1),
                         values: vec!["final".to_string(), "dev".to_string()],
                         ..VersionComponentSpec::default()
                     },
@@ -849,7 +848,7 @@ mod tests {
                 (
                     "dev_n".to_string(),
                     VersionComponentSpec {
-                        // first_value: Some(1),
+                        first_value: Some("1".to_string()),
                         ..VersionComponentSpec::default()
                     },
                 ),
