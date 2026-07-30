@@ -54,7 +54,7 @@ futures = "0"
 
 # testing
 color-eyre = "0"
-similar-asserts = "1"
+similar-asserts = "2.0.0"
 
 [workspace.metadata.cargo-fc]
 install_missing_targets = true

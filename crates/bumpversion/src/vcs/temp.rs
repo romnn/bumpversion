@@ -5,7 +5,7 @@ use std::path::Path;
 use tempfile::TempDir;
 
 fn random_string_of_length(length: usize) -> String {
-    use rand::{Rng, distr::Alphanumeric};
+    use rand::{RngExt, distr::Alphanumeric};
     rand::rng()
         .sample_iter(&Alphanumeric)
         .take(length)
