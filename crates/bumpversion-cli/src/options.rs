@@ -198,7 +198,8 @@ pub struct Options {
         long = "regex",
         help = "treat the search parameter as a regular expression",
         env = "BUMPVERSION_REGEX",
-        global = true
+        action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub regex: Option<bool>,
 
@@ -206,7 +207,8 @@ pub struct Options {
         long = "no-regex",
         help = "explicitly do not treat the search parameter as a regular expression",
         env = "BUMPVERSION_NO_REGEX",
-        global = true
+        action = clap::ArgAction::SetTrue,
+        global = true,
     )]
     pub no_regex: Option<bool>,
 
@@ -440,10 +442,7 @@ pub fn parse_positional_arguments(
 }
 
 pub fn global_cli_config(options: &Options) -> eyre::Result<bumpversion::config::GlobalConfig> {
-    let search_as_regex = options
-        .allow_dirty
-        .or(options.no_allow_dirty.invert())
-        .unwrap_or(false);
+    let search_as_regex = options.regex.or(options.no_regex.invert()).unwrap_or(false);
 
     let search = options
         .search
@@ -484,7 +483,7 @@ pub fn global_cli_config(options: &Options) -> eyre::Result<bumpversion::config:
         .transpose()?;
 
     let tag_message = options
-        .tag_name
+        .tag_message
         .as_deref()
         .map(bumpversion::f_string::PythonFormatString::parse)
         .transpose()?;
