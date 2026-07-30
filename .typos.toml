@@ -1,5 +1,10 @@
 [files]
 ignore-files = true
+extend-exclude = [
+  # Generated docs assets: chroma syntax CSS (`hugo gen chromastyles`) and the
+  # terminal snippets rendered from real `bumpversion` output (scripts/terminals.sh).
+  "docs/assets/**/*",
+]
 
 [default]
 extend-ignore-re = [

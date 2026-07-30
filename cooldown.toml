@@ -1,1 +1,8 @@
 min-age = "14d"
+
+[global]
+# The docs site is a Hugo module, so docs/go.mod exists purely to pin the theme —
+# excluding it keeps cooldown from detecting a Go project here. docs/examples/
+# holds fixture manifests (Cargo.toml, pyproject.toml, package.json) that are
+# documentation inputs, not dependencies.
+exclude-folders = ["/docs"]
