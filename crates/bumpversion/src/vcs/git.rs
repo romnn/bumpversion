@@ -76,7 +76,10 @@ pub enum InvalidTagError {
 
 /// Represents a git repository at a given filesystem path.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[allow(clippy::module_name_repetitions)]
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "the public name distinguishes this implementation from other repository types"
+)]
 pub struct GitRepository {
     path: PathBuf,
 }

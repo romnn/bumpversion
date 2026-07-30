@@ -225,6 +225,10 @@ impl<'de> From<&toml_span::value::ValueInner<'de>> for ValueKind {
 
 #[inline]
 /// Parse a string array from a value.
+///
+/// # Errors
+///
+/// Returns [`ParseError::UnexpectedType`] if any value is not a string.
 pub fn as_string_array<'de>(value: &'de toml::Value<'de>) -> Result<Vec<String>, ParseError> {
     Ok(as_str_array(value)?
         .into_iter()
@@ -244,6 +248,10 @@ pub fn as_array<'de>(value: &'de toml::Value<'de>) -> Vec<&'de toml::Value<'de>>
 
 #[inline]
 /// Parse a string array (as `&str`) from a value.
+///
+/// # Errors
+///
+/// Returns [`ParseError::UnexpectedType`] if any value is not a string.
 pub fn as_str_array<'de>(value: &'de toml::Value<'de>) -> Result<Vec<&'de str>, ParseError> {
     as_array(value)
         .into_iter()
@@ -253,6 +261,10 @@ pub fn as_str_array<'de>(value: &'de toml::Value<'de>) -> Result<Vec<&'de str>, 
 
 #[inline]
 /// Parse a [`PythonFormatString`] from a TOML value.
+///
+/// # Errors
+///
+/// Returns [`ParseError`] if the value is not a string or contains an invalid format string.
 pub fn as_format_string<'de>(
     value: &'de toml::Value<'de>,
 ) -> Result<PythonFormatString, ParseError> {
@@ -267,6 +279,10 @@ pub fn as_format_string<'de>(
 
 #[inline]
 /// Parse a compiled regex from a TOML value.
+///
+/// # Errors
+///
+/// Returns [`ParseError`] if the value is not a string or contains an invalid regular expression.
 pub fn as_regex<'de>(value: &'de toml::Value<'de>) -> Result<config::regex::Regex, ParseError> {
     as_str(value).and_then(|s| {
         // let s = s.replace("\\\\", "\\");
@@ -283,12 +299,20 @@ pub fn as_regex<'de>(value: &'de toml::Value<'de>) -> Result<config::regex::Rege
 
 #[inline]
 /// Parse a owned string from a TOML value.
+///
+/// # Errors
+///
+/// Returns [`ParseError::UnexpectedType`] if the value is not a string.
 pub fn as_string<'de>(value: &'de toml::Value<'de>) -> Result<String, ParseError> {
     as_str(value).map(ToString::to_string)
 }
 
 #[inline]
 /// Parse a `&str` from a TOML value.
+///
+/// # Errors
+///
+/// Returns [`ParseError::UnexpectedType`] if the value is not a string.
 pub fn as_str<'de>(value: &'de toml::Value<'de>) -> Result<&'de str, ParseError> {
     value.as_str().ok_or_else(|| ParseError::UnexpectedType {
         message: "expected a string".to_string(),
@@ -300,6 +324,10 @@ pub fn as_str<'de>(value: &'de toml::Value<'de>) -> Result<&'de str, ParseError>
 
 #[inline]
 /// Parse a boolean from a TOML value.
+///
+/// # Errors
+///
+/// Returns [`ParseError::UnexpectedType`] if the value is not a boolean.
 pub fn as_bool<'de>(value: &'de toml::Value<'de>) -> Result<bool, ParseError> {
     value.as_bool().ok_or_else(|| ParseError::UnexpectedType {
         message: "expected a boolean".to_string(),
@@ -531,6 +559,10 @@ pub(crate) fn parse_file_config<'de>(
 
 impl Config {
     /// Parse bumpversion configuration from a `toml_span` value tree.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParseError`] if the bumpversion table contains an invalid configuration value.
     pub fn from_pyproject_value(
         config: &toml::Value,
         _file_id: FileId,
@@ -610,6 +642,10 @@ impl Config {
     }
 
     /// Parse bumpversion configuration from a `pyproject.toml` string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParseError`] if the TOML document or bumpversion configuration is invalid.
     pub fn from_pyproject_toml(
         config: &str,
         file_id: FileId,
@@ -622,7 +658,6 @@ impl Config {
 }
 
 #[cfg(test)]
-#[allow(clippy::too_many_lines, clippy::unnecessary_wraps)]
 /// Test helpers and compatibility tests for parsing `pyproject.toml` bumpversion configuration.
 pub mod tests {
     use crate::{
@@ -736,6 +771,10 @@ pub mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the complex fixture and its complete expected configuration form one test case"
+    )]
     fn parse_pyproject_toml_complex() -> eyre::Result<()> {
         crate::tests::init();
 
@@ -1160,6 +1199,10 @@ pub mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the compatibility fixture and its complete expected configuration form one test case"
+    )]
     fn parse_pyproject_toml_compat() -> eyre::Result<()> {
         crate::tests::init();
 
@@ -1580,6 +1623,10 @@ pub mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the upstream compatibility fixture is kept intact so configuration parity stays auditable"
+    )]
     fn parse_pyproject_toml_of_bump_my_version() -> eyre::Result<()> {
         use crate::config::MergeWith;
 

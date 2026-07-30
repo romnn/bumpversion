@@ -158,6 +158,10 @@ pub mod parser {
     /// let parts = parse_format_arguments("v{major}.{minor}.{patch}")?;
     /// # Ok::<(), bumpversion::f_string::ParseError>(())
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParseError`] if `value` is not a valid Python-style format string.
     pub fn parse_format_arguments(value: &str) -> Result<Vec<Value<'_>>, ParseError> {
         let test = repeat(0.., text_or_argument)
             .parse(value)
@@ -343,6 +347,10 @@ pub struct MissingArgumentError(String);
 
 impl PythonFormatString {
     /// Parse a Python-style format string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`parser::ParseError`] if `value` contains invalid format-string syntax.
     pub fn parse(value: &str) -> Result<Self, parser::ParseError> {
         let arguments = parser::parse_format_arguments(value)?;
         Ok(Self(arguments.into_iter().map(Into::into).collect()))
@@ -351,6 +359,11 @@ impl PythonFormatString {
     /// Format this string with the given `values`.
     ///
     /// If `strict` is `true`, missing placeholders result in an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MissingArgumentError`] when `strict` is `true` and a placeholder has no
+    /// corresponding value.
     pub fn format<K, V>(
         &self,
         values: &HashMap<K, V>,

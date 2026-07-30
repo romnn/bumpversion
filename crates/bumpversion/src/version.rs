@@ -69,6 +69,11 @@ pub mod values {
         }
 
         /// Return the item after ``value`` in the list.
+        ///
+        /// # Errors
+        ///
+        /// Returns [`Error::InvalidValue`] if `value` is not allowed, or [`Error::MaxReached`] if
+        /// it is already the final allowed value.
         pub fn bump(&self, value: &str) -> Result<&'a str, Error> {
             let current_idx = self
                 .values
@@ -568,6 +573,10 @@ impl Version {
     /// Increase the value of the specified component.
     ///
     /// This will reset its dependents, and return a new `Version`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BumpError`] if the component does not exist or its value cannot be incremented.
     pub fn bump(&self, component: &str) -> Result<Self, BumpError> {
         if !self.components.contains_key(component) {
             return Err(BumpError::InvalidComponent(component.to_string()));
@@ -630,7 +639,10 @@ impl Version {
 ///
 /// Defines the order of components, which depend on which, and which always increment.
 #[derive(Debug, Clone, Default)]
-#[allow(clippy::module_name_repetitions)]
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "the public name distinguishes a complete specification from component specifications"
+)]
 pub struct VersionSpec {
     components: VersionComponentConfigs,
     dependency_map: HashMap<String, Vec<String>>,

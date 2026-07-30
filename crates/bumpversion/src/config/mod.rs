@@ -95,13 +95,12 @@ impl ConfigFile {
     #[must_use]
     /// Return the path of this config file.
     pub fn path(&self) -> &Path {
-        #[allow(clippy::match_same_arms)]
         match self {
-            Self::BumpversionToml(path) => path.as_ref(),
-            Self::PyProject(path) => path.as_ref(),
-            Self::BumpversionCfg(path) => path.as_ref(),
-            Self::SetupCfg(path) => path.as_ref(),
-            Self::CargoToml(path) => path.as_ref(),
+            Self::BumpversionToml(path)
+            | Self::PyProject(path)
+            | Self::BumpversionCfg(path)
+            | Self::SetupCfg(path)
+            | Self::CargoToml(path) => path.as_ref(),
         }
     }
 }

@@ -1,7 +1,5 @@
 //! Integration tests for the `bumpversion` CLI binary.
 
-#![allow(clippy::unnecessary_wraps)]
-
 use assert_cmd::Command;
 use color_eyre::eyre;
 use predicates::prelude::*;
@@ -18,23 +16,21 @@ fn git_init(dir: &Path) -> eyre::Result<()> {
 }
 
 #[test]
-fn test_show_help() -> eyre::Result<()> {
+fn test_show_help() {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
     cmd.arg("show").arg("--help");
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("Usage: bumpversion show"));
-    Ok(())
 }
 
 #[test]
-fn test_show_bump_help() -> eyre::Result<()> {
+fn test_show_bump_help() {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
     cmd.arg("show-bump").arg("--help");
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("Usage: bumpversion show-bump"));
-    Ok(())
 }
 
 #[test]

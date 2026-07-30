@@ -60,7 +60,6 @@
 //! # }
 //! ```
 #![forbid(unsafe_code)]
-#![allow(clippy::missing_errors_doc)]
 // #![warn(missing_docs)]
 
 pub mod command;
@@ -103,7 +102,8 @@ pub enum Bump<'a> {
 /// Find config file in one of the default config file locations.
 ///
 /// # Errors
-/// When the config file cannot be read or parsed.
+///
+/// Returns [`config::Error`] if a discovered configuration file cannot be read or parsed.
 pub async fn find_config<W>(
     dir: &Path,
     config_overrides: &config::GlobalConfig,
@@ -280,6 +280,11 @@ pub struct BumpVersion<VCS, L> {
 /// Apply configured version modifications to all configured files.
 ///
 /// Returns a list of file paths paired with their modifications (or `None` if no changes were made).
+///
+/// # Errors
+///
+/// Returns [`BumpError`] if a configured file cannot be read or written, or its replacement cannot
+/// be rendered.
 pub async fn apply_modifications<'a, VCS, S>(
     configured_files: &'a IndexMap<PathBuf, Vec<config::change::FileChange>>,
     current_version: &version::Version,

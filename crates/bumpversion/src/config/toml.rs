@@ -177,7 +177,6 @@ where
 }
 
 #[cfg(test)]
-#[allow(clippy::too_many_lines, clippy::unnecessary_wraps)]
 mod tests {
     use crate::{
         config::{
@@ -312,6 +311,10 @@ mod tests {
 
     /// Taken from <https://github.com/callowayproject/bump-my-version/blob/master/tests/fixtures/basic_cfg.toml>
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the compatibility fixture and its complete expected configuration form one test case"
+    )]
     fn parse_compat_basic_cfg_toml() -> eyre::Result<()> {
         crate::tests::init();
 
@@ -621,6 +624,10 @@ mod tests {
 
     /// Taken from <https://github.com/callowayproject/bump-my-version/blob/master/tests/fixtures/pep440.toml>
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the PEP 440 fixture and its complete expected configuration form one test case"
+    )]
     fn parse_compat_pep440_toml() -> eyre::Result<()> {
         crate::tests::init();
 

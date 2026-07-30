@@ -105,6 +105,11 @@ impl RegexTemplate {
     }
 
     /// Format this template using `values` and compile it into a [`regex::Regex`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RegexTemplateError`] if a required template argument is missing or the formatted
+    /// pattern is not a valid regular expression.
     pub fn format<K, V>(
         &self,
         values: &HashMap<K, V>,

@@ -1,7 +1,5 @@
 //! Integration tests for version component bumping.
 
-#![allow(clippy::unnecessary_wraps)]
-
 use bumpversion::{config::version::VersionComponentSpec, version::Component};
 use color_eyre::eyre;
 
@@ -73,16 +71,15 @@ fn test_values_optional_value() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_reset_to_first() -> eyre::Result<()> {
+fn test_reset_to_first() {
     let spec = VersionComponentSpec::default(); // numeric, first_value defaults to "0"
     let component = Component::new(Some("5"), spec);
     let reset = component.first();
     assert_eq!(reset.value(), Some("0"));
-    Ok(())
 }
 
 #[test]
-fn test_reset_to_first_values() -> eyre::Result<()> {
+fn test_reset_to_first_values() {
     let spec = VersionComponentSpec {
         values: vec!["a".to_string(), "b".to_string()],
         ..Default::default()
@@ -90,5 +87,4 @@ fn test_reset_to_first_values() -> eyre::Result<()> {
     let component = Component::new(Some("b"), spec);
     let reset = component.first();
     assert_eq!(reset.value(), Some("a"));
-    Ok(())
 }

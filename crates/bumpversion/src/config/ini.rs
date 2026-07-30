@@ -146,6 +146,10 @@ mod diagnostics {
 
 #[inline]
 /// Parse a boolean from an INI value.
+///
+/// # Errors
+///
+/// Returns [`ParseError::UnexpectedType`] if the value is not `true` or `false`.
 pub fn as_bool(value: &ini::Spanned<String>) -> Result<bool, ParseError> {
     match value.as_ref().trim().to_ascii_lowercase().as_str() {
         "true" => Ok(true),
@@ -160,6 +164,10 @@ pub fn as_bool(value: &ini::Spanned<String>) -> Result<bool, ParseError> {
 
 #[inline]
 /// Parse a [`PythonFormatString`] from an INI value.
+///
+/// # Errors
+///
+/// Returns [`ParseError::InvalidFormatString`] if the value is not a valid format string.
 pub fn as_format_string(value: ini::Spanned<String>) -> Result<PythonFormatString, ParseError> {
     let ini::Spanned { inner, span } = value;
     PythonFormatString::parse(&inner).map_err(|source| ParseError::InvalidFormatString {
@@ -171,6 +179,10 @@ pub fn as_format_string(value: ini::Spanned<String>) -> Result<PythonFormatStrin
 
 #[inline]
 /// Parse a compiled regex from an INI value.
+///
+/// # Errors
+///
+/// Returns [`ParseError::InvalidRegex`] if the value is not a valid regular expression.
 pub fn as_regex(value: ini::Spanned<String>) -> Result<config::Regex, ParseError> {
     let ini::Spanned { inner, span } = value;
     // let inner = inner.replace("\\\\", "\\");
@@ -186,6 +198,11 @@ pub fn as_regex(value: ini::Spanned<String>) -> Result<config::Regex, ParseError
 
 #[inline]
 /// Parse a list of strings from an INI value while preserving the input span.
+///
+/// # Errors
+///
+/// Returns [`ParseError::UnexpectedType`] if the value has no list delimiter and a single value is
+/// not allowed.
 pub fn as_spanned_string_array(
     value: ini::Spanned<String>,
     allow_single_value: bool,
@@ -219,6 +236,11 @@ pub fn as_spanned_string_array(
 
 #[inline]
 /// Parse a list of strings from an INI value.
+///
+/// # Errors
+///
+/// Returns [`ParseError::UnexpectedType`] if the value has no list delimiter and a single value is
+/// not allowed.
 pub fn as_string_array(
     value: ini::Spanned<String>,
     allow_single_value: bool,
@@ -304,7 +326,37 @@ fn parse_search_pattern(
     Ok((search_is_regex_compat, search))
 }
 
-#[allow(clippy::too_many_lines)]
+fn remove_optional_bool(
+    value: &mut ini::SectionProxyMut<'_>,
+    key: &str,
+) -> Result<Option<bool>, ParseError> {
+    value
+        .remove_option(key)
+        .and_then(as_optional)
+        .as_ref()
+        .map(as_bool)
+        .transpose()
+}
+
+fn remove_optional_string_array(
+    value: &mut ini::SectionProxyMut<'_>,
+    key: &str,
+) -> Result<Option<Vec<String>>, ParseError> {
+    value
+        .remove_option(key)
+        .and_then(as_optional)
+        .map(|value| as_string_array(value, true))
+        .transpose()
+}
+
+fn remove_optional_path_array(
+    value: &mut ini::SectionProxyMut<'_>,
+    key: &str,
+) -> Result<Option<Vec<PathBuf>>, ParseError> {
+    Ok(remove_optional_string_array(value, key)?
+        .map(|values| values.into_iter().map(PathBuf::from).collect()))
+}
+
 pub(crate) fn parse_global_config(
     mut value: ini::SectionProxyMut<'_>,
 ) -> Result<(Option<bool>, GlobalConfig), ParseError> {
@@ -315,12 +367,7 @@ pub(crate) fn parse_global_config(
 
     let (search_is_regex_compat, search) = parse_search_pattern(&mut value, None)?;
 
-    let allow_dirty = value
-        .remove_option("allow_dirty")
-        .and_then(as_optional)
-        .as_ref()
-        .map(as_bool)
-        .transpose()?;
+    let allow_dirty = remove_optional_bool(&mut value, "allow_dirty")?;
     let parse_version_pattern = value.remove_option("parse").map(as_regex).transpose()?;
 
     let serialize_version_patterns = value
@@ -341,42 +388,12 @@ pub(crate) fn parse_global_config(
         .and_then(as_optional)
         .map(ini::Spanned::into_inner);
 
-    let no_configured_files = value
-        .remove_option("no_configured_files")
-        .and_then(as_optional)
-        .as_ref()
-        .map(as_bool)
-        .transpose()?;
-    let ignore_missing_files = value
-        .remove_option("ignore_missing_files")
-        .and_then(as_optional)
-        .as_ref()
-        .map(as_bool)
-        .transpose()?;
-    let ignore_missing_version = value
-        .remove_option("ignore_missing_version")
-        .and_then(as_optional)
-        .as_ref()
-        .map(as_bool)
-        .transpose()?;
-    let dry_run = value
-        .remove_option("dry_run")
-        .and_then(as_optional)
-        .as_ref()
-        .map(as_bool)
-        .transpose()?;
-    let commit = value
-        .remove_option("commit")
-        .and_then(as_optional)
-        .as_ref()
-        .map(as_bool)
-        .transpose()?;
-    let tag = value
-        .remove_option("tag")
-        .and_then(as_optional)
-        .as_ref()
-        .map(as_bool)
-        .transpose()?;
+    let no_configured_files = remove_optional_bool(&mut value, "no_configured_files")?;
+    let ignore_missing_files = remove_optional_bool(&mut value, "ignore_missing_files")?;
+    let ignore_missing_version = remove_optional_bool(&mut value, "ignore_missing_version")?;
+    let dry_run = remove_optional_bool(&mut value, "dry_run")?;
+    let commit = remove_optional_bool(&mut value, "commit")?;
+    let tag = remove_optional_bool(&mut value, "tag")?;
     let sign_tags = value
         .remove_option("sign_tag")
         .or(value.remove_option("sign_tags"))
@@ -406,39 +423,12 @@ pub(crate) fn parse_global_config(
         .map(ini::Spanned::into_inner);
 
     // extra stuff
-    let setup_hooks = value
-        .remove_option("setup_hooks")
-        .and_then(as_optional)
-        .map(|value| as_string_array(value, true))
-        .transpose()?;
-    let pre_commit_hooks = value
-        .remove_option("pre_commit_hooks")
-        .and_then(as_optional)
-        .map(|value| as_string_array(value, true))
-        .transpose()?;
-    let post_commit_hooks = value
-        .remove_option("post_commit_hooks")
-        .and_then(as_optional)
-        .map(|value| as_string_array(value, true))
-        .transpose()?;
-    let included_paths = value
-        .remove_option("included_paths")
-        .and_then(as_optional)
-        .map(|value| as_string_array(value, true))
-        .transpose()?
-        .map(|values| values.into_iter().map(PathBuf::from).collect());
-    let excluded_paths = value
-        .remove_option("excluded_paths")
-        .and_then(as_optional)
-        .map(|value| as_string_array(value, true))
-        .transpose()?
-        .map(|values| values.into_iter().map(PathBuf::from).collect());
-    let additional_files = value
-        .remove_option("additional_files")
-        .and_then(as_optional)
-        .map(|value| as_string_array(value, true))
-        .transpose()?
-        .map(|values| values.into_iter().map(PathBuf::from).collect());
+    let setup_hooks = remove_optional_string_array(&mut value, "setup_hooks")?;
+    let pre_commit_hooks = remove_optional_string_array(&mut value, "pre_commit_hooks")?;
+    let post_commit_hooks = remove_optional_string_array(&mut value, "post_commit_hooks")?;
+    let included_paths = remove_optional_path_array(&mut value, "included_paths")?;
+    let excluded_paths = remove_optional_path_array(&mut value, "excluded_paths")?;
+    let additional_files = remove_optional_path_array(&mut value, "additional_files")?;
 
     Ok((
         search_is_regex_compat,
@@ -521,6 +511,10 @@ pub(crate) fn parse_file_config(
 
 impl config::Config {
     /// Parse bumpversion configuration from an INI value tree.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParseError`] if a recognized section contains an invalid configuration value.
     pub fn from_ini_value(
         mut config: ini::Value,
         file_id: FileId,
@@ -617,6 +611,10 @@ impl config::Config {
     }
 
     /// Parse bumpversion configuration from an INI string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParseError`] if the INI document or a recognized configuration value is invalid.
     pub fn from_ini(
         config: &str,
         options: Options,
@@ -631,6 +629,10 @@ impl config::Config {
     }
 
     /// Parse bumpversion configuration from a `setup.cfg` INI string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParseError`] if the INI document or a recognized configuration value is invalid.
     pub fn from_setup_cfg_ini(
         config: &str,
         options: Options,
@@ -667,6 +669,10 @@ static CONFIG_CURRENT_VERSION_REGEX: std::sync::LazyLock<regex::Regex> = std::sy
 /// it will use a regular expression to just replace the `current_version` value.
 /// The idea is it will avoid unintentional changes (like formatting) to the
 /// config file.
+///
+/// # Errors
+///
+/// Returns [`IoError`] if the configuration file cannot be read or updated.
 pub async fn replace_version<K, V, S>(
     path: &Path,
     _config: &config::FinalizedConfig,
@@ -733,7 +739,6 @@ where
 }
 
 #[cfg(test)]
-#[allow(clippy::too_many_lines, clippy::unnecessary_wraps)]
 mod tests {
     use crate::{
         config::{
@@ -988,6 +993,10 @@ mod tests {
 
     /// Taken from <https://github.com/callowayproject/bump-my-version/blob/master/tests/fixtures/basic_cfg.cfg>
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the compatibility fixture and its complete expected configuration form one test case"
+    )]
     fn parse_compat_basic_cfg_cfg() -> eyre::Result<()> {
         crate::tests::init();
 

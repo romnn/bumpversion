@@ -57,6 +57,10 @@ pub trait VersionControlSystem {
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Open the VCS repository at the given path.
+    ///
+    /// # Errors
+    ///
+    /// Returns the implementation's error if `path` is not a usable repository.
     fn open(path: impl Into<PathBuf>) -> Result<Self, Self::Error>
     where
         Self: Sized;

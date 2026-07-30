@@ -206,6 +206,11 @@ impl Modification {
 /// Read a file at `path`, apply version replacement, and write back if changed.
 ///
 /// Honors `dry_run` to skip writing. Returns `None` if file unchanged or missing (when allowed).
+///
+/// # Errors
+///
+/// Returns [`ReplaceVersionError`] if the file cannot be read or written, or a configured version
+/// replacement cannot be rendered.
 pub async fn replace_version_in_file<K, V, S>(
     path: &Path,
     changes: &[FileChange],
@@ -343,6 +348,11 @@ pub type FileMap = IndexMap<PathBuf, Vec<FileChange>>;
 /// Build the file map from `config`, expanding glob patterns and relative paths.
 ///
 /// Applies `parts` (version component configs) and resolves paths under `base_dir`.
+///
+/// # Errors
+///
+/// Returns [`Error`] if a glob is invalid, a glob match cannot be read, or a relative path cannot
+/// be canonicalized.
 pub fn resolve_files_from_config(
     config: &mut config::FinalizedConfig,
     parts: &VersionComponentConfigs,

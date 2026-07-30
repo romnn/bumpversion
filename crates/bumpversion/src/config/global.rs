@@ -61,7 +61,6 @@ pub struct GlobalConfig {
 
 /// Global configuration with defaults applied.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct GlobalConfigFinalized {
     /// Don't abort if working directory is dirty
     pub allow_dirty: bool,

@@ -282,6 +282,10 @@ impl Printer<term::termcolor::Buffer> {
     /// Print written diagnostics to stderr.
     ///
     /// This is a workaround for <https://github.com/BurntSushi/termcolor/issues/51>.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if the buffered diagnostic output cannot be flushed.
     pub fn print(&self) -> Result<(), std::io::Error> {
         use std::io::Write;
         let mut writer = self.writer.lock();
@@ -310,6 +314,10 @@ impl Printer<term::StylesWriter<'static, term::termcolor::StandardStream>> {
 
 impl<W> Printer<W> {
     /// Resolve the 0-based line indices for each label in `diagnostic`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a label references an unknown file or an invalid byte offset.
     pub fn lines(
         &self,
         diagnostic: &Diagnostic<usize>,
@@ -338,6 +346,11 @@ where
     W: term::WriteStyle,
 {
     /// Emit a diagnostic to this printer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a referenced source file cannot be resolved or the diagnostic cannot be
+    /// written.
     pub fn emit(&self, diagnostic: &Diagnostic<usize>) -> Result<(), files::Error> {
         let mut writer = self.writer.lock();
         term::emit_to_write_style(
