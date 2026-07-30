@@ -1,0 +1,87 @@
+<span class="term-fg32 term-fg1">$</span> bumpversion --help
+&nbsp;
+bump git version
+&nbsp;
+Usage: bumpversion [OPTIONS] [ARGS]... [COMMAND]
+&nbsp;
+Commands:
+  major
+  minor
+  patch
+  show
+  show-bump
+  bump
+  help       Print this message or the help of the given subcommand(s)
+&nbsp;
+Arguments:
+  [ARGS]...
+&nbsp;
+Options:
+      --dir &lt;DIR&gt;
+          repository directory to run bumpversion in [env: BUMPVERSION_DIR=]
+      --config-file &lt;CONFIG_FILE&gt;
+          config file to read most of the variables from [env: BUMPVERSION_CONFIG_FILE=]
+      --color &lt;COLOR_CHOICE&gt;
+          enable or disable color [env: BUMPVERSION_COLOR=]
+  -v, --verbose...
+          Increase logging verbosity
+  -q, --quiet...
+          Decrease logging verbosity
+      --log &lt;LOG_LEVEL&gt;
+          Log level. When using a more sophisticated logging setup using RUST_LOG environment variable, this option is overwritten. [env: BUMPVERSION_LOG_LEVEL=]
+      --allow-dirty
+          don&#39;t abort if working directory is dirty [env: BUMPVERSION_ALLOW_DIRTY=]
+      --no-allow-dirty
+          explicitly abort if dirty [env: BUMPVERSION_NO_ALLOW_DIRTY=]
+      --current-version &lt;CURRENT_VERSION&gt;
+          version that needs to be updated [env: BUMPVERSION_CURRENT_VERSION=]
+      --new-version &lt;NEW_VERSION&gt;
+          new version that should be in the files [env: BUMPVERSION_NEW_VERSION=]
+      --parse &lt;PARSE_VERSION_PATTERN&gt;
+          regex parsing the version string [env: BUMPVERSION_PARSE=]
+      --serialize &lt;SERIALIZE_VERSION_PATTERNS&gt;
+          how to format what is parsed back to a version [env: BUMPVERSION_SERIALIZE=]
+      --search &lt;SEARCH&gt;
+          template for complete string to search [env: BUMPVERSION_SEARCH=]
+      --replace &lt;REPLACE&gt;
+          template for complete string to replace [env: BUMPVERSION_REPLACE=]
+      --regex
+          treat the search parameter as a regular expression [env: BUMPVERSION_REGEX=]
+      --no-regex
+          explicitly do not treat the search parameter as a regular expression [env: BUMPVERSION_NO_REGEX=]
+      --no-configured-files
+          only replace the version in files specified on the command line, ignoring the files from the configuration file [env: BUMPVERSION_NO_CONFIGURED_FILES=]
+      --ignore-missing-files
+          ignore any missing files when searching and replacing in files [env: BUMPVERSION_IGNORE_MISSING_FILES=]
+      --no-ignore-missing-files
+          do not allow missing files when searching and replacing in files [env: BUMPVERSION_NO_IGNORE_MISSING_FILES=]
+      --ignore-missing-version
+          ignore any missing versions when searching and replacing in files [env: BUMPVERSION_IGNORE_MISSING_VERSION=]
+      --no-ignore-missing-version
+          do not allow missing versions when searching and replacing in files [env: BUMPVERSION_NO_IGNORE_MISSING_VERSION=]
+  -n, --dry-run
+          don&#39;t write any files, just pretend. [env: BUMPVERSION_DRY_RUN=]
+      --commit
+          commit to version control [env: BUMPVERSION_COMMIT=]
+      --no-commit
+          do not commit to version control [env: BUMPVERSION_NO_COMMIT=]
+      --tag
+          create a tag in version control [env: BUMPVERSION_TAG=]
+      --no-tag
+          do not create a tag in version control [env: BUMPVERSION_NO_TAG=]
+      --sign-tags
+          sign tags if created [env: BUMPVERSION_SIGN_TAGS=]
+      --no-sign-tags
+          do not sign tags if created [env: BUMPVERSION_NO_SIGN_TAGS=]
+      --tag-name &lt;TAG_NAME&gt;
+          tag name (only works with --tag) [env: BUMPVERSION_TAG_NAME=]
+      --tag-message &lt;TAG_MESSAGE&gt;
+          tag message [env: BUMPVERSION_TAG_MESSAGE=]
+  -m, --message &lt;COMMIT_MESSAGE&gt;
+          commit message [env: BUMPVERSION_MESSAGE=]
+      --commit-args &lt;COMMIT_ARGS&gt;
+          extra arguments to commit command [env: BUMPVERSION_COMMIT_ARGS=]
+  -h, --help
+          Print help
+  -V, --version
+          Print version

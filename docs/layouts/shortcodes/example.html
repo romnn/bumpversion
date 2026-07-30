@@ -1,0 +1,20 @@
+{{- /* Inline a file from the committed example projects under docs/examples/,
+       syntax-highlighted. Pairing this with the `terminal` shortcode is what keeps
+       the docs honest: the config a page shows is the same file scripts/terminals.sh
+       runs bumpversion against to produce the output below it, so a stale example
+       cannot survive a regeneration.
+
+       Usage: {{< example path="simple/.bumpversion.toml" lang="toml" >}}
+       `lang` defaults to the file extension; `.cfg` files are highlighted as ini. */ -}}
+{{- $path := .Get "path" -}}
+{{- $full := printf "examples/%s" $path -}}
+{{- if not (fileExists $full) -}}
+  {{- errorf "example shortcode: %s not found" $full -}}
+{{- end -}}
+{{- $ext := strings.TrimPrefix "." (path.Ext $path) -}}
+{{- $lang := .Get "lang" | default (cond (eq $ext "cfg") "ini" $ext) -}}
+{{- $body := readFile $full | strings.TrimSpace -}}
+<div class="bv-example">
+  <div class="bv-example__name">{{ .Get "title" | default (path.Base $path) }}</div>
+  {{ highlight $body $lang "" }}
+</div>

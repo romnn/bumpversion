@@ -1,0 +1,10 @@
+[tool.bumpversion]
+current_version = "1.4.2"
+commit = true
+tag = true
+
+[[tool.bumpversion.files]]
+filename = "Cargo.toml"
+
+[[tool.bumpversion.files]]
+filename = "README.md"

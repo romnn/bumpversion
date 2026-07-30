@@ -1,0 +1,40 @@
+<span class="term-fg32 term-fg1">$</span> bumpversion --dry-run -v bump minor
+&nbsp;
+<span class="term-fg34"> [DRY-RUN] [current version]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg33 term-fg1">0.5.0</span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[setup]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">running</span> test -z &quot;$(git status --porcelain --untracked-files=no)&quot;
+<span class="term-fg34"> [DRY-RUN] [new version]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg33 term-fg1">0.6.0</span>
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[.&#47;src&#47;version.rs]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	replacing `<span class="term-fg31">{current_version}</span>` (<span class="term-fg31 term-fg2">0.5.0</span>) with `<span class="term-fg32">{new_version}</span>` (<span class="term-fg32 term-fg2">0.6.0</span>)
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span>	Differences (-before|+after):
+<span class="term-fg34"> [DRY-RUN] </span>	-pub const VERSION: &amp;str = &quot;0.5.0&quot;;
+<span class="term-fg34"> [DRY-RUN] </span>	+pub const VERSION: &amp;str = &quot;0.6.0&quot;;
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[.&#47;.bumpversion.toml]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	replacing `<span class="term-fg31">{current_version}</span>` (<span class="term-fg31 term-fg2">0.5.0</span>) with `<span class="term-fg32">{new_version}</span>` (<span class="term-fg32 term-fg2">0.6.0</span>)
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span>	Differences (-before|+after):
+<span class="term-fg34"> [DRY-RUN] </span>	 [tool.bumpversion]
+<span class="term-fg34"> [DRY-RUN] </span>	-current_version = &quot;0.5.0&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	+current_version = &quot;0.6.0&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	 commit = true
+<span class="term-fg34"> [DRY-RUN] </span>	 tag = true
+<span class="term-fg34"> [DRY-RUN] </span>	 tag_name = &quot;v{new_version}&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	 message = &quot;chore(release): {current_version} → {new_version}&quot;
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[pre-commit]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">running</span> sh scripts&#47;changelog.sh $BVHOOK_NEW_VERSION
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[commit]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">   add</span> <span class="term-fg36">.&#47;src&#47;version.rs</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">   add</span> <span class="term-fg36">.&#47;CHANGELOG.md</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">   add</span> <span class="term-fg36">.&#47;.bumpversion.toml</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">commit</span> <span class="term-fg36">chore(release): 0.5.0 → 0.6.0</span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[tag]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">tag = </span><span class="term-fg33">v0.6.0</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">message = </span><span class="term-fg33">Bump version: 0.5.0 → 0.6.0</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">sign = </span><span class="term-fg33">false</span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[post-commit]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">running</span> echo released $BVHOOK_NEW_VERSION

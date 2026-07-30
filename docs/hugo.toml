@@ -1,0 +1,60 @@
+baseURL = 'https://romnn.github.io/bumpversion/'
+title = 'bumpversion'
+locale = 'en-us'
+
+# Book configuration
+disablePathToLower = true
+enableGitInfo = false
+enableRobotsTXT = true
+
+# The hugo-book theme is pulled in as a Hugo module (needs Go at build time),
+# pinned in go.mod/go.sum — no git submodule.
+[module]
+[[module.imports]]
+path = 'github.com/alex-shpak/hugo-book'
+
+[markup]
+[markup.goldmark.renderer]
+  # Landing page hero and cards use inline HTML.
+  unsafe = true
+[markup.tableOfContents]
+  startLevel = 2
+  endLevel = 3
+  ordered = false
+[markup.highlight]
+  # Emit CSS classes so light/dark syntax themes can be swapped via
+  # prefers-color-scheme (see assets/_syntax.scss).
+  noClasses = false
+  tabWidth = 2
+
+[params]
+  description = 'A fast, drop-in Rust rewrite of bump-my-version: update every version string in your project, then commit and tag the change.'
+
+  # Follow the reader's OS light/dark preference.
+  BookTheme = 'auto'
+  BookSection = 'docs'
+  BookToC = true
+  BookSearch = true
+  BookComments = false
+  # Project pages under a subpath + a precaching service worker is a recipe for
+  # stale assets; keep it off.
+  BookServiceWorker = false
+
+  BookRepo = 'https://github.com/romnn/bumpversion'
+  # `.Path` is the source file relative to this docs/ working dir (e.g.
+  # `/content/docs/introduction.md`), so the base stops at `docs`.
+  BookEditLink = '{{ .Site.Params.BookRepo }}/edit/main/docs{{ .Path }}'
+
+[menu]
+[[menu.after]]
+  name = 'GitHub'
+  url = 'https://github.com/romnn/bumpversion'
+  weight = 10
+[[menu.after]]
+  name = 'crates.io'
+  url = 'https://crates.io/crates/bumpversion'
+  weight = 20
+[[menu.after]]
+  name = 'docs.rs'
+  url = 'https://docs.rs/bumpversion'
+  weight = 30

@@ -10,3 +10,8 @@ dist/
 .intentionally-empty-file.o
 *_compiler_family.o
 tmpbuild/
+
+# hugo documentation site (docs/)
+docs/public
+docs/resources
+docs/.hugo_build.lock

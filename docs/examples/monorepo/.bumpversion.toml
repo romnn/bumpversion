@@ -1,0 +1,16 @@
+[tool.bumpversion]
+current_version = "2.7.0"
+commit = true
+tag = true
+
+# One entry covers every package that matches, so adding a package needs no
+# config change.
+[[tool.bumpversion.files]]
+glob = "packages/*/package.json"
+
+# `search`/`replace` narrow the match to the manifest's own `version` key, so a
+# dependency pinned to the same version elsewhere in the file is left alone.
+[[tool.bumpversion.files]]
+glob = "packages/*/package.json"
+search = '"version": "{current_version}"'
+replace = '"version": "{new_version}"'

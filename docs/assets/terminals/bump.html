@@ -1,0 +1,55 @@
+<span class="term-fg32 term-fg1">$</span> bumpversion --dry-run -vv bump patch
+&nbsp;
+<span class="term-fg34"> [DRY-RUN] [current version]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg33 term-fg1">1.4.2</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg36">major</span>=1  <span class="term-fg36">minor</span>=4  <span class="term-fg36">patch</span>=2
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[setup]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">no setup hooks defined</span>
+<span class="term-fg34"> [DRY-RUN] [new version]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg33 term-fg1">1.4.3</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg36">major</span>=1  <span class="term-fg36">minor</span>=4  <span class="term-fg36">patch</span>=3
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[.&#47;Cargo.toml]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	replacing `<span class="term-fg31">{current_version}</span>` (<span class="term-fg31 term-fg2">1.4.2</span>) with `<span class="term-fg32">{new_version}</span>` (<span class="term-fg32 term-fg2">1.4.3</span>)
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span>	Differences (-before|+after):
+<span class="term-fg34"> [DRY-RUN] </span>	 [package]
+<span class="term-fg34"> [DRY-RUN] </span>	 name = &quot;widget&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	-version = &quot;1.4.2&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	+version = &quot;1.4.3&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	 edition = &quot;2024&quot;
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[.&#47;README.md]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	replacing `<span class="term-fg31">{current_version}</span>` (<span class="term-fg31 term-fg2">1.4.2</span>) with `<span class="term-fg32">{new_version}</span>` (<span class="term-fg32 term-fg2">1.4.3</span>)
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span>	Differences (-before|+after):
+<span class="term-fg34"> [DRY-RUN] </span>	-# widget 1.4.2
+<span class="term-fg34"> [DRY-RUN] </span>	+# widget 1.4.3
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span>	-Install with `cargo add widget@1.4.2`.
+<span class="term-fg34"> [DRY-RUN] </span>	+Install with `cargo add widget@1.4.3`.
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[.&#47;.bumpversion.toml]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	replacing `<span class="term-fg31">{current_version}</span>` (<span class="term-fg31 term-fg2">1.4.2</span>) with `<span class="term-fg32">{new_version}</span>` (<span class="term-fg32 term-fg2">1.4.3</span>)
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span>	Differences (-before|+after):
+<span class="term-fg34"> [DRY-RUN] </span>	 [tool.bumpversion]
+<span class="term-fg34"> [DRY-RUN] </span>	-current_version = &quot;1.4.2&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	+current_version = &quot;1.4.3&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	 commit = true
+<span class="term-fg34"> [DRY-RUN] </span>	 tag = true
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span>	 [[tool.bumpversion.files]]
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[pre-commit]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">no pre-commit hooks defined</span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[commit]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">   add</span> <span class="term-fg36">.&#47;Cargo.toml</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">   add</span> <span class="term-fg36">.&#47;README.md</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">   add</span> <span class="term-fg36">.&#47;.bumpversion.toml</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">commit</span> <span class="term-fg36">Bump version: 1.4.2 → 1.4.3</span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[tag]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">tag = </span><span class="term-fg33">v1.4.3</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">message = </span><span class="term-fg33">Bump version: 1.4.2 → 1.4.3</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">sign = </span><span class="term-fg33">false</span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[post-commit]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">no post-commit hooks defined</span>

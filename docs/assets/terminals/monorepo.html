@@ -1,0 +1,55 @@
+<span class="term-fg32 term-fg1">$</span> bumpversion --dry-run -v bump major
+&nbsp;
+<span class="term-fg34"> [DRY-RUN] [current version]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg33 term-fg1">2.7.0</span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[setup]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">no setup hooks defined</span>
+<span class="term-fg34"> [DRY-RUN] [new version]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg33 term-fg1">3.0.0</span>
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[.&#47;packages&#47;cli&#47;package.json]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	replacing `<span class="term-fg31">{current_version}</span>` (<span class="term-fg31 term-fg2">2.7.0</span>) with `<span class="term-fg32">{new_version}</span>` (<span class="term-fg32 term-fg2">3.0.0</span>)
+<span class="term-fg34"> [DRY-RUN] </span>	replacing `<span class="term-fg31">&quot;version&quot;: &quot;{current_version}&quot;</span>` (<span class="term-fg31 term-fg2">&quot;version&quot;: &quot;2.7.0&quot;</span>) with `<span class="term-fg32">&quot;version&quot;: &quot;{new_version}&quot;</span>` (<span class="term-fg32 term-fg2">&quot;version&quot;: &quot;3.0.0&quot;</span>)
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span>	Differences (-before|+after):
+<span class="term-fg34"> [DRY-RUN] </span>	 {
+<span class="term-fg34"> [DRY-RUN] </span>	   &quot;name&quot;: &quot;@widget&#47;cli&quot;,
+<span class="term-fg34"> [DRY-RUN] </span>	-  &quot;version&quot;: &quot;2.7.0&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	+  &quot;version&quot;: &quot;3.0.0&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	 }
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[.&#47;packages&#47;core&#47;package.json]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	replacing `<span class="term-fg31">{current_version}</span>` (<span class="term-fg31 term-fg2">2.7.0</span>) with `<span class="term-fg32">{new_version}</span>` (<span class="term-fg32 term-fg2">3.0.0</span>)
+<span class="term-fg34"> [DRY-RUN] </span>	replacing `<span class="term-fg31">&quot;version&quot;: &quot;{current_version}&quot;</span>` (<span class="term-fg31 term-fg2">&quot;version&quot;: &quot;2.7.0&quot;</span>) with `<span class="term-fg32">&quot;version&quot;: &quot;{new_version}&quot;</span>` (<span class="term-fg32 term-fg2">&quot;version&quot;: &quot;3.0.0&quot;</span>)
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span>	Differences (-before|+after):
+<span class="term-fg34"> [DRY-RUN] </span>	 {
+<span class="term-fg34"> [DRY-RUN] </span>	   &quot;name&quot;: &quot;@widget&#47;core&quot;,
+<span class="term-fg34"> [DRY-RUN] </span>	-  &quot;version&quot;: &quot;2.7.0&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	+  &quot;version&quot;: &quot;3.0.0&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	 }
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[.&#47;.bumpversion.toml]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	replacing `<span class="term-fg31">{current_version}</span>` (<span class="term-fg31 term-fg2">2.7.0</span>) with `<span class="term-fg32">{new_version}</span>` (<span class="term-fg32 term-fg2">3.0.0</span>)
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span>	Differences (-before|+after):
+<span class="term-fg34"> [DRY-RUN] </span>	 [tool.bumpversion]
+<span class="term-fg34"> [DRY-RUN] </span>	-current_version = &quot;2.7.0&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	+current_version = &quot;3.0.0&quot;
+<span class="term-fg34"> [DRY-RUN] </span>	 commit = true
+<span class="term-fg34"> [DRY-RUN] </span>	 tag = true
+<span class="term-fg34"> [DRY-RUN] </span>
+<span class="term-fg34"> [DRY-RUN] </span>	 # One entry covers every package that matches, so adding a package needs no
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[pre-commit]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">no pre-commit hooks defined</span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[commit]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">   add</span> <span class="term-fg36">.&#47;packages&#47;cli&#47;package.json</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">   add</span> <span class="term-fg36">.&#47;packages&#47;core&#47;package.json</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">   add</span> <span class="term-fg36">.&#47;.bumpversion.toml</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">commit</span> <span class="term-fg36">Bump version: 2.7.0 → 3.0.0</span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[tag]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">tag = </span><span class="term-fg33">v3.0.0</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">message = </span><span class="term-fg33">Bump version: 2.7.0 → 3.0.0</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">sign = </span><span class="term-fg33">false</span>
+<span class="term-fg34"> [DRY-RUN] </span><span class="term-fg35">[post-commit]</span>
+<span class="term-fg34"> [DRY-RUN] </span>	<span class="term-fg2">no post-commit hooks defined</span>

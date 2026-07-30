@@ -10,6 +10,14 @@ actionlint = "latest"
 "github:romnn/cooldown" = { version = "latest", minimum_release_age = "0" }
 "github:romnn/bumpversion" = { version = "latest", matching = "bumpversion", minimum_release_age = "0" }
 
+# Documentation site (docs/, Hugo + hugo-book theme). The theme is a Hugo module, so
+# `hugo` shells out to `go` at build time, and it compiles SCSS, which needs the
+# *extended* Hugo build (the default aqua package is non-extended) — hence asdf.
+# terminal-to-html renders the ANSI terminal snippets to HTML (scripts/terminals.sh).
+go = "latest"
+"asdf:NeoHsu/asdf-hugo" = "extended-0.163.3"
+"github:buildkite/terminal-to-html" = "latest"
+
 # Cargo plugins
 "aqua:nextest-rs/nextest/cargo-nextest" = "latest"
 "github:romnn/cargo-feature-combinations" = { version = "latest", matching = "cargo-fc", minimum_release_age = "0" }

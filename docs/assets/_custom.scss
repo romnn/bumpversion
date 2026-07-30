@@ -1,0 +1,392 @@
+@import "syntax";
+
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fonts/geist-sans.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('fonts/geist-mono.woff2') format('woff2');
+}
+
+:root {
+  --bv-sans: 'Geist', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --bv-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/*
+  Theme application. An inline <head> script resolves the effective theme from
+  localStorage or prefers-color-scheme and sets data-theme before first paint,
+  so these two rules cover both the OS default and the manual toggle. The
+  attribute selector also outranks the theme's own `:root { … }` block.
+*/
+@mixin bv-light {
+  @include theme-light;
+  --bv-brand: #0f766e;
+  --bv-brand-strong: #0b5d57;
+  --bv-brand-contrast: #ffffff;
+  --color-link: #0b5d57;
+  --color-visited-link: #0b5d57;
+
+  /* Inline code and code blocks (theme uses --gray-100 bg + --gray-200 border);
+     kept clearly distinct from the white body. */
+  --gray-100: #eef0f4;
+  --gray-200: #dbdfe6;
+
+  --bv-surface: #ffffff;
+  --bv-surface-2: #f6f7f9;
+  --bv-border: #e6e8eb;
+  --bv-muted: #59626d;
+  --bv-scroll-thumb: #c7ccd1;
+}
+
+@mixin bv-dark {
+  @include theme-dark;
+  --bv-brand: #4fd1c5;
+  --bv-brand-strong: #7fe6dc;
+  --bv-brand-contrast: #06302c;
+  --color-link: #5cdcce;
+  --color-visited-link: #5cdcce;
+
+  /* A neutral dark gray — darker and less blue than the theme's Nord default
+     (#2e3440), but not a harsh near-black. Text is softened off-white so the
+     contrast stays comfortable. */
+  --body-background: #1a1c21;
+  --body-font-color: #dce1e7;
+  /* Inline code and code blocks sit one clear step above the body, with a
+     visible border, so they read as distinct surfaces. */
+  --gray-100: #282d37;
+  --gray-200: #3a414e;
+  --gray-500: #bec6cf;
+
+  --bv-surface: #23262d;
+  --bv-surface-2: #1f2228;
+  --bv-border: #313641;
+  --bv-muted: #949dab;
+  --bv-scroll-thumb: #3a414c;
+}
+
+/* Base defaults so every --bv-* variable is defined even when data-theme is not
+   set yet — before the head script runs, on a livereload repaint, or with JS
+   disabled. Without them var(--bv-brand-contrast)/var(--bv-brand) are undefined
+   and the primary hero button renders transparent with black text. */
+:root { @include bv-light; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) { @include bv-dark; }
+}
+:root[data-theme="light"] { @include bv-light; }
+:root[data-theme="dark"] { @include bv-dark; }
+
+/* Keep code blocks on the same neutral "code surface" as inline code (one step
+   above the body), rather than the syntax theme's tinted background. Token
+   colors are unchanged. */
+:root[data-theme="dark"] pre.chroma {
+  background: var(--gray-100);
+}
+
+body {
+  font-family: var(--bv-sans);
+}
+
+/* Thin, theme-aware scrollbars (page, menu, TOC, code blocks, tables). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bv-scroll-thumb) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bv-scroll-thumb);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--bv-brand);
+}
+
+/* The terminal is always dark, so its scrollbar is too, regardless of theme. */
+.bv-term__body {
+  scrollbar-color: #4a5160 transparent;
+}
+
+.bv-term__body::-webkit-scrollbar-thumb {
+  background: #4a5160;
+}
+
+.bv-term__body::-webkit-scrollbar-thumb:hover {
+  background: #5c6470;
+}
+
+code, kbd, samp, pre, .chroma, .bv-term__body {
+  font-family: var(--bv-mono);
+}
+
+.markdown h1, .markdown h2, .markdown h3, .markdown h4 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* The book theme forces TOC entries onto a single line (`white-space: nowrap`),
+   so a long entry (e.g. a heading naming two flags) overflows the column instead
+   of wrapping. Allow entries to wrap, but keep each hyphenated flag name whole —
+   otherwise the default line-breaking chops `--ignore-missing-version` mid-word
+   at a hyphen. */
+.book-toc a {
+  /* The theme lays TOC links out as flex, so their content never wraps and
+     overflows instead — make them normal block boxes that wrap at spaces. */
+  display: block;
+  white-space: normal;
+}
+.book-toc code {
+  white-space: nowrap;
+}
+.book-toc li {
+  margin: 0.2rem 0;
+  line-height: 1.35;
+}
+
+.markdown pre.chroma {
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--gray-200);
+  border-radius: 0.4rem;
+  overflow-x: auto;
+}
+
+/* Reference tables (config keys, CLI flags) are dense and code-heavy; keep the
+   first column from wrapping mid-identifier and let wide tables scroll. */
+.markdown table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.markdown table code {
+  white-space: nowrap;
+}
+
+.bv-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin: 0.25rem 0 0.75rem;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  font-size: var(--font-size-smaller);
+  color: var(--body-font-color);
+  background: var(--bv-surface-2);
+  border: 1px solid var(--bv-border);
+  border-radius: 0.35rem;
+  cursor: pointer;
+}
+
+.bv-theme-btn:hover {
+  border-color: var(--bv-brand);
+}
+
+.bv-theme-btn__icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.markdown a.bv-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.55rem 1.15rem;
+  border-radius: 0.4rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid var(--bv-border);
+  color: var(--body-font-color);
+}
+
+.markdown a.bv-btn:hover {
+  border-color: var(--bv-brand);
+  text-decoration: none;
+}
+
+.markdown a.bv-btn--primary {
+  background: var(--bv-brand);
+  border-color: var(--bv-brand);
+  color: var(--bv-brand-contrast);
+}
+
+.markdown a.bv-btn--primary:hover {
+  background: var(--bv-brand-strong);
+  border-color: var(--bv-brand-strong);
+}
+
+/* The verbose report is a tall, narrow-ish block, so the hero stacks: the text
+   on top, the flagship dry-run full-width below it. */
+.bv-hero {
+  margin: 0.25rem 0 2.5rem;
+}
+
+.bv-hero__text {
+  max-width: 44rem;
+}
+
+.bv-hero__text h1 {
+  font-size: 2rem;
+  line-height: 1.15;
+  margin: 0 0 0.6rem;
+  border: 0;
+  padding: 0;
+}
+
+.bv-hero__lead {
+  font-size: 1.05rem;
+  color: var(--bv-muted);
+  margin: 0 0 1.3rem;
+  line-height: 1.55;
+}
+
+.bv-hero__cmd {
+  display: inline-block;
+  font-family: var(--bv-mono);
+  background: #0e1116;
+  color: #e6edf3;
+  padding: 0.5rem 0.85rem;
+  border-radius: 0.4rem;
+  margin-bottom: 1.3rem;
+  font-size: 0.9rem;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.bv-hero__cmd::before {
+  content: "$ ";
+  color: #4ade80;
+}
+
+.bv-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+/* The landing page's closing shot: a live terminal snippet (not an image) showing
+   a full verbose report. It sits at the foot of the page rather than in the hero
+   precisely so it can run to its natural ~55 lines — no inner scrollbar, the whole
+   run visible at once. Wide lines still scroll horizontally. */
+.bv-showcase .bv-term {
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
+}
+
+.bv-showcase .bv-term pre.bv-term__body {
+  max-height: none;
+}
+
+.bv-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin: 1.25rem 0 2rem;
+}
+
+.bv-card {
+  border: 1px solid var(--bv-border);
+  border-radius: 0.5rem;
+  padding: 1rem 1.1rem;
+  background: var(--bv-surface);
+}
+
+.bv-card h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.98rem;
+}
+
+.bv-card p {
+  margin: 0;
+  color: var(--bv-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+/* A file from docs/examples/, inlined by the `example` shortcode. The filename
+   header makes clear this is a real committed file, not a hand-written snippet. */
+.bv-example {
+  margin: 1.1rem 0;
+  border: 1px solid var(--bv-border);
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+
+.bv-example__name {
+  padding: 0.4rem 0.85rem;
+  font-family: var(--bv-mono);
+  font-size: 0.78rem;
+  color: var(--bv-muted);
+  background: var(--bv-surface-2);
+  border-bottom: 1px solid var(--bv-border);
+}
+
+/* The shortcode's highlight block sits flush inside the bordered container, so
+   drop the standalone code-block chrome the rule above gives every `pre`. */
+.markdown .bv-example pre.chroma {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Terminal snippets (generated by scripts/terminals.sh). Plain dark block —
+   no window chrome — rendered dark in both site themes. */
+.bv-term {
+  margin: 1.1rem 0;
+  border: 1px solid #21262d;
+  border-radius: 0.4rem;
+  overflow: hidden;
+  background: #0e1116;
+}
+
+/* Raised specificity so the always-dark terminal keeps light text on light pages,
+   where the theme's `.markdown pre` color would otherwise win. */
+.bv-term pre.bv-term__body {
+  margin: 0;
+  padding: 0.9rem 1.1rem;
+  max-height: 32rem;
+  overflow: auto;
+  background: none;
+  color: #e6edf3;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre;
+  tab-size: 4;
+}
+
+/* bumpversion's verbose report uses the basic 16-color SGR set, which
+   terminal-to-html classes as `term-fgN` (N = the SGR parameter). Only these
+   appear in the snippets; keep them in sync with the report's own palette
+   (crates/bumpversion-cli/src/verbose.rs). */
+.bv-term__body {
+  .term-fg1  { font-weight: 600; }      /* bold — version numbers */
+  .term-fg2  { color: #7d8590; }        /* dim — "no hooks defined", old/new values */
+  .term-fg31 { color: #ff7b72; }        /* red — the search template */
+  .term-fg32 { color: #7ee787; }        /* green — the replace template */
+  .term-fg33 { color: #e3b341; }        /* yellow — current and new version */
+  .term-fg34 { color: #79c0ff; }        /* blue — the [DRY-RUN] prefix, section headings */
+  .term-fg35 { color: #d2a8ff; }        /* magenta — file and hook headings */
+  .term-fg36 { color: #56d4dd; }        /* cyan */
+}
+
+/* A dim red/green pair still has to read as red/green, so re-assert the hue on
+   the combined classes rather than letting the dim gray win by source order. */
+.bv-term__body .term-fg31.term-fg2 { color: #c9564f; }
+.bv-term__body .term-fg32.term-fg2 { color: #4e9e5a; }
