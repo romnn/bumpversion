@@ -24,16 +24,22 @@ pub fn setup(
         .with_default_directive(default_log_level.into())
         .parse(default_log_directive)?;
 
-    let env_filter_directive = std::env::var("RUST_LOG").ok();
+    // `RUST_LOG` holds a filter directive, so it is parsed directly. (`with_env_var`
+    // takes the *name* of a variable to read, so passing the value made every
+    // `RUST_LOG` setting fail to resolve and fall back to the default.)
+    let env_filter_directive = std::env::var("RUST_LOG")
+        .ok()
+        .filter(|directive| !directive.trim().is_empty());
     let env_filter = match env_filter_directive {
         Some(directive) => {
             match tracing_subscriber::filter::EnvFilter::builder()
-                .with_env_var(directive)
-                .try_from_env()
+                .with_regex(true)
+                .with_default_directive(default_log_level.into())
+                .parse(&directive)
             {
                 Ok(env_filter) => env_filter,
                 Err(err) => {
-                    eprintln!("invalid log filter: {err}");
+                    eprintln!("invalid log filter {directive:?}: {err}");
                     eprintln!("falling back to default logging");
                     default_env_filter
                 }
