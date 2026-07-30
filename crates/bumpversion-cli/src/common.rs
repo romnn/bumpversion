@@ -246,7 +246,7 @@ where
 
     let new_version = current_version.bump(component)?;
     let serialize_version_patterns = &manager.config.global.serialize_version_patterns;
-    
+
     // We need a context to serialize
     let ctx_without_new_version: std::collections::HashMap<String, String> =
         bumpversion::context::get_context(

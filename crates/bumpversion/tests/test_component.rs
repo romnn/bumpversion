@@ -2,10 +2,7 @@
 
 #![allow(clippy::unnecessary_wraps)]
 
-use bumpversion::{
-    config::version::VersionComponentSpec,
-    version::Component,
-};
+use bumpversion::{config::version::VersionComponentSpec, version::Component};
 use color_eyre::eyre;
 
 #[test]
@@ -26,7 +23,7 @@ fn test_numeric_bump_first_value() -> eyre::Result<()> {
     let component = Component::new(None, spec.clone());
     // Initial value should be first_value ("1")
     assert_eq!(component.value(), Some("1"));
-    
+
     // Bump should go to 2
     let bumped = component.bump()?;
     assert_eq!(bumped.value(), Some("2"));
@@ -39,14 +36,14 @@ fn test_values_bump() -> eyre::Result<()> {
         values: vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()],
         ..Default::default()
     };
-    
+
     let component = Component::new(Some("alpha"), spec.clone());
     let bumped = component.bump()?;
     assert_eq!(bumped.value(), Some("beta"));
-    
+
     let bumped = bumped.bump()?;
     assert_eq!(bumped.value(), Some("gamma"));
-    
+
     assert!(bumped.bump().is_err(), "Should error on max value");
     Ok(())
 }
@@ -58,15 +55,15 @@ fn test_values_optional_value() -> eyre::Result<()> {
         optional_value: Some("gamma".to_string()),
         ..Default::default()
     };
-    
+
     let component = Component::new(None, spec.clone());
-    
+
     // With optional_value set to "gamma", a missing value defaults to "gamma".
     assert_eq!(component.value(), Some("gamma"));
-    
+
     // Bumping "gamma" (last value) should fail
     assert!(component.bump().is_err());
-    
+
     // If we explicitly set it to "alpha", it should bump to "beta"
     let component_alpha = Component::new(Some("alpha"), spec.clone());
     assert_eq!(component_alpha.value(), Some("alpha"));

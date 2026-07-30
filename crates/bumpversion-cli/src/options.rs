@@ -96,7 +96,7 @@ pub struct Options {
         long = "dir",
         help = "repository directory to run bumpversion in",
         env = "BUMPVERSION_DIR",
-        global = true,
+        global = true
     )]
     pub dir: Option<PathBuf>,
 
@@ -104,7 +104,7 @@ pub struct Options {
         long = "config-file",
         help = "config file to read most of the variables from",
         env = "BUMPVERSION_CONFIG_FILE",
-        global = true,
+        global = true
     )]
     pub config_file: Option<PathBuf>,
 
@@ -112,7 +112,7 @@ pub struct Options {
         long = "color",
         env = "BUMPVERSION_COLOR",
         help = "enable or disable color",
-        global = true,
+        global = true
     )]
     pub color_choice: Option<termcolor::ColorChoice>,
 
@@ -150,7 +150,7 @@ pub struct Options {
         long = "current-version",
         help = "version that needs to be updated",
         env = "BUMPVERSION_CURRENT_VERSION",
-        global = true,
+        global = true
     )]
     pub current_version: Option<String>,
 
@@ -158,7 +158,7 @@ pub struct Options {
         long = "new-version",
         help = "new version that should be in the files",
         env = "BUMPVERSION_NEW_VERSION",
-        global = true,
+        global = true
     )]
     pub new_version: Option<String>,
 
@@ -166,7 +166,7 @@ pub struct Options {
         long = "parse",
         help = "regex parsing the version string",
         env = "BUMPVERSION_PARSE",
-        global = true,
+        global = true
     )]
     pub parse_version_pattern: Option<String>,
 
@@ -174,7 +174,7 @@ pub struct Options {
         long = "serialize",
         help = "how to format what is parsed back to a version",
         env = "BUMPVERSION_SERIALIZE",
-        global = true,
+        global = true
     )]
     pub serialize_version_patterns: Option<Vec<String>>,
 
@@ -182,7 +182,7 @@ pub struct Options {
         long = "search",
         help = "template for complete string to search",
         env = "BUMPVERSION_SEARCH",
-        global = true,
+        global = true
     )]
     pub search: Option<String>,
 
@@ -190,7 +190,7 @@ pub struct Options {
         long = "replace",
         help = "template for complete string to replace",
         env = "BUMPVERSION_REPLACE",
-        global = true,
+        global = true
     )]
     pub replace: Option<String>,
 
@@ -198,7 +198,7 @@ pub struct Options {
         long = "regex",
         help = "treat the search parameter as a regular expression",
         env = "BUMPVERSION_REGEX",
-        global = true,
+        global = true
     )]
     pub regex: Option<bool>,
 
@@ -206,7 +206,7 @@ pub struct Options {
         long = "no-regex",
         help = "explicitly do not treat the search parameter as a regular expression",
         env = "BUMPVERSION_NO_REGEX",
-        global = true,
+        global = true
     )]
     pub no_regex: Option<bool>,
 
@@ -323,7 +323,7 @@ pub struct Options {
         long = "tag-name",
         help = "tag name (only works with --tag)",
         env = "BUMPVERSION_TAG_NAME",
-        global = true,
+        global = true
     )]
     pub tag_name: Option<String>,
 
@@ -331,7 +331,7 @@ pub struct Options {
         long = "tag-message",
         help = "tag message",
         env = "BUMPVERSION_TAG_MESSAGE",
-        global = true,
+        global = true
     )]
     pub tag_message: Option<String>,
 
@@ -340,7 +340,7 @@ pub struct Options {
         long = "message",
         help = "commit message",
         env = "BUMPVERSION_MESSAGE",
-        global = true,
+        global = true
     )]
     pub commit_message: Option<String>,
 
@@ -348,7 +348,7 @@ pub struct Options {
         long = "commit-args",
         help = "extra arguments to commit command",
         env = "BUMPVERSION_COMMIT_ARGS",
-        global = true,
+        global = true
     )]
     pub commit_args: Option<String>,
 

@@ -43,7 +43,7 @@ fn test_show_current_version() -> eyre::Result<()> {
     // Let's use a temporary directory and create a config file
     let temp = tempfile::tempdir()?;
     let config_path = temp.path().join("pyproject.toml");
-    
+
     fs::write(
         &config_path,
         r#"
@@ -56,14 +56,14 @@ current_version = "1.2.3"
     // Actually our implementation checks git unless we handle it, but we removed check_is_dirty for show.
     // However, it still tries to open the repo: `let repo = GitRepository::open(&dir)?;` in common.rs
     // So we must init a git repo.
-    
+
     git_init(temp.path())?;
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
     cmd.current_dir(temp.path())
         .arg("show")
         .arg("current_version");
-        
+
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("1.2.3"));
@@ -74,7 +74,7 @@ current_version = "1.2.3"
 fn test_show_bump_major() -> eyre::Result<()> {
     let temp = tempfile::tempdir()?;
     let config_path = temp.path().join(".bumpversion.toml");
-    
+
     fs::write(
         &config_path,
         r#"
@@ -86,10 +86,8 @@ current_version = "1.2.3"
     git_init(temp.path())?;
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
-    cmd.current_dir(temp.path())
-        .arg("show-bump")
-        .arg("major");
-        
+    cmd.current_dir(temp.path()).arg("show-bump").arg("major");
+
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("old_version=1.2.3"))
@@ -101,7 +99,7 @@ current_version = "1.2.3"
 fn test_values_bump_scenario() -> eyre::Result<()> {
     let temp = tempfile::tempdir()?;
     let config_path = temp.path().join("pyproject.toml");
-    
+
     fs::write(
         &config_path,
         r#"
@@ -122,14 +120,14 @@ optional_value = "final"
     // Wait, 1.0.0 matches the second pattern. Bumping release (which is currently "final" implicitly?)
     // If optional_value="final", then 1.0.0 is effectively 1.0.0-final.
     // Bumping "final" -> error (max reached).
-    
+
     // Ah, wait. If we want to go from 1.0.0 to 1.0.0-alpha, we aren't bumping "release" part directly if it's already at max?
     // Actually, usually you bump 'patch' to get 1.0.1, then 'release' to get 1.0.1-alpha?
     // Or if we have 1.0.0-alpha, bumping release gives 1.0.0-beta.
-    
+
     // Let's test explicit component bumping if we start with pre-release.
     // Reset config to have current_version = "1.0.0-alpha"
-    
+
     fs::write(
         &config_path,
         r#"
@@ -143,12 +141,10 @@ values = ["alpha", "beta", "rc", "final"]
 optional_value = "final"
 "#,
     )?;
-    
+
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
-    cmd.current_dir(temp.path())
-        .arg("show-bump")
-        .arg("release");
-        
+    cmd.current_dir(temp.path()).arg("show-bump").arg("release");
+
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("old_version=1.0.0-alpha"))
@@ -161,7 +157,7 @@ fn test_bump_modifies_file() -> eyre::Result<()> {
     let temp = tempfile::tempdir()?;
     let config_path = temp.path().join(".bumpversion.toml");
     let source_path = temp.path().join("VERSION");
-    
+
     fs::write(
         &config_path,
         r#"
@@ -176,7 +172,7 @@ filename = "VERSION"
     fs::write(&source_path, "1.2.3")?;
 
     git_init(temp.path())?;
-        
+
     // We need to configure git user for commit to work (if bumpversion commits by default, which it might not if --no-commit or default is false)
     // Default config: commit = false. So we should be fine without git config unless we enable it.
     // However, to be safe and allow dirty check to pass (or fail if we don't commit), let's see.
@@ -189,13 +185,12 @@ filename = "VERSION"
         .arg("--allow-dirty")
         .arg("--no-commit")
         .arg("--no-tag");
-        
-    cmd.assert()
-        .success();
-        
+
+    cmd.assert().success();
+
     let content = fs::read_to_string(&source_path)?;
     assert_eq!(content, "1.2.4");
-    
+
     let config_content = fs::read_to_string(&config_path)?;
     assert!(config_content.contains(r#"current_version = "1.2.4""#));
     Ok(())
@@ -206,7 +201,7 @@ fn test_bump_custom_search_replace() -> eyre::Result<()> {
     let temp = tempfile::tempdir()?;
     let config_path = temp.path().join(".bumpversion.toml");
     let source_path = temp.path().join("VERSION");
-    
+
     fs::write(
         &config_path,
         r#"
@@ -231,10 +226,9 @@ filename = "VERSION"
         .arg("--allow-dirty")
         .arg("--no-commit")
         .arg("--no-tag");
-        
-    cmd.assert()
-        .success();
-        
+
+    cmd.assert().success();
+
     let content = fs::read_to_string(&source_path)?;
     assert_eq!(content, "my-version: 1.2.4");
     Ok(())
@@ -245,7 +239,7 @@ fn test_bump_dry_run() -> eyre::Result<()> {
     let temp = tempfile::tempdir()?;
     let config_path = temp.path().join(".bumpversion.toml");
     let source_path = temp.path().join("VERSION");
-    
+
     fs::write(
         &config_path,
         r#"
@@ -270,14 +264,19 @@ filename = "VERSION"
         .arg("--allow-dirty")
         .arg("--no-commit")
         .arg("--no-tag");
-        
-    cmd.assert()
-        .success();
-        
+
+    cmd.assert().success();
+
     let content = fs::read_to_string(&source_path)?;
-    assert_eq!(content, initial_content, "File should not change in dry-run");
-    
+    assert_eq!(
+        content, initial_content,
+        "File should not change in dry-run"
+    );
+
     let config_content = fs::read_to_string(&config_path)?;
-    assert!(config_content.contains(r#"current_version = "1.2.3""#), "Config should not change in dry-run");
+    assert!(
+        config_content.contains(r#"current_version = "1.2.3""#),
+        "Config should not change in dry-run"
+    );
     Ok(())
 }

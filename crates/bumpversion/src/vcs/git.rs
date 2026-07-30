@@ -273,9 +273,9 @@ impl GitRepository {
                     && output
                         .stderr
                         .contains("No names found, cannot describe anything")
-                    {
-                        return Ok(None);
-                    }
+                {
+                    return Ok(None);
+                }
                 Err(err.into())
             }
         }

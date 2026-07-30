@@ -699,34 +699,34 @@ mod tests {
         independent = true
     "#};
 
-    let config = parse_toml(bumpversion_toml, &Printer::default())?.0?;
+        let config = parse_toml(bumpversion_toml, &Printer::default())?.0?;
 
-    let mut expected = Config {
-        global: GlobalConfig {
-            allow_dirty: Some(false),
-            commit: Some(false),
-            commit_message: Some(PythonFormatString(vec![
-                Value::String("Bump version: ".to_string()),
-                Value::Argument("current_version".to_string()),
-                Value::String(" → ".to_string()),
-                Value::Argument("new_version".to_string()),
-            ])),
-            commit_args: Some(String::new()),
-            tag: Some(false),
-            sign_tags: Some(false),
-            tag_name: Some(PythonFormatString(vec![
-                Value::String("v".to_string()),
-                Value::Argument("new_version".to_string()),
-            ])),
-            tag_message: Some(PythonFormatString(vec![
-                Value::String("Bump version: ".to_string()),
-                Value::Argument("current_version".to_string()),
-                Value::String(" → ".to_string()),
-                Value::Argument("new_version".to_string()),
-            ])),
-            current_version: Some("1.0.0".to_string()),
-            parse_version_pattern: Some(
-                regex::Regex::new(indoc::indoc! {r"(?x)
+        let mut expected = Config {
+            global: GlobalConfig {
+                allow_dirty: Some(false),
+                commit: Some(false),
+                commit_message: Some(PythonFormatString(vec![
+                    Value::String("Bump version: ".to_string()),
+                    Value::Argument("current_version".to_string()),
+                    Value::String(" → ".to_string()),
+                    Value::Argument("new_version".to_string()),
+                ])),
+                commit_args: Some(String::new()),
+                tag: Some(false),
+                sign_tags: Some(false),
+                tag_name: Some(PythonFormatString(vec![
+                    Value::String("v".to_string()),
+                    Value::Argument("new_version".to_string()),
+                ])),
+                tag_message: Some(PythonFormatString(vec![
+                    Value::String("Bump version: ".to_string()),
+                    Value::Argument("current_version".to_string()),
+                    Value::String(" → ".to_string()),
+                    Value::Argument("new_version".to_string()),
+                ])),
+                current_version: Some("1.0.0".to_string()),
+                parse_version_pattern: Some(
+                    regex::Regex::new(indoc::indoc! {r"(?x)
                 (?:
                     (?P<major>[0-9]+)
                     (?:
@@ -758,136 +758,137 @@ mod tests {
                 )
                 (?:\+(?P<local>[a-z0-9]+(?:[-_\.][a-z0-9]+)*))?
                 ",
-                })?
-                .into(),
-            ),
-            serialize_version_patterns: Some(vec![
-                // "{major}.{minor}.{patch}.{dev_label}{distance_to_latest_tag}+{short_branch_name}".to_string(),
-                // "{major}.{minor}.{patch}".to_string(),
-                [
-                    Value::Argument("major".to_string()),
-                    Value::String(".".to_string()),
-                    Value::Argument("minor".to_string()),
-                    Value::String(".".to_string()),
-                    Value::Argument("patch".to_string()),
-                    Value::String(".".to_string()),
-                    Value::Argument("dev_label".to_string()),
-                    Value::Argument("distance_to_latest_tag".to_string()),
-                    Value::String("+".to_string()),
-                    Value::Argument("short_branch_name".to_string()),
-                ]
-                .into_iter()
-                .collect(),
-                [
-                    Value::Argument("major".to_string()),
-                    Value::String(".".to_string()),
-                    Value::Argument("minor".to_string()),
-                    Value::String(".".to_string()),
-                    Value::Argument("patch".to_string()),
-                ]
-                .into_iter()
-                .collect(),
-            ]),
-            search: Some(RegexTemplate::Escaped(
-                [Value::Argument("current_version".to_string())]
+                    })?
+                    .into(),
+                ),
+                serialize_version_patterns: Some(vec![
+                    // "{major}.{minor}.{patch}.{dev_label}{distance_to_latest_tag}+{short_branch_name}".to_string(),
+                    // "{major}.{minor}.{patch}".to_string(),
+                    [
+                        Value::Argument("major".to_string()),
+                        Value::String(".".to_string()),
+                        Value::Argument("minor".to_string()),
+                        Value::String(".".to_string()),
+                        Value::Argument("patch".to_string()),
+                        Value::String(".".to_string()),
+                        Value::Argument("dev_label".to_string()),
+                        Value::Argument("distance_to_latest_tag".to_string()),
+                        Value::String("+".to_string()),
+                        Value::Argument("short_branch_name".to_string()),
+                    ]
                     .into_iter()
                     .collect(),
-            )),
-            replace: Some("{new_version}".to_string()),
-            ..GlobalConfig::empty()
-        },
-        files: vec![].into_iter().collect(),
-        components: [
-            (
-                "pre_label".to_string(),
-                VersionComponentSpec {
-                    values: vec![
-                        "final".to_string(),
-                        "a".to_string(),
-                        "b".to_string(),
-                        "rc".to_string(),
-                    ],
-                    ..VersionComponentSpec::default()
-                },
-            ),
-            (
-                "pre_n".to_string(),
-                VersionComponentSpec {
-                    // first_value: Some(1),
-                    ..VersionComponentSpec::default()
-                },
-            ),
-            (
-                "post_label".to_string(),
-                VersionComponentSpec {
-                    values: vec!["final".to_string(), "post".to_string()],
-                    ..VersionComponentSpec::default()
-                },
-            ),
-            (
-                "post_n".to_string(),
-                VersionComponentSpec {
-                    // first_value: Some(1),
-                    ..VersionComponentSpec::default()
-                },
-            ),
-            (
-                "dev_label".to_string(),
-                VersionComponentSpec {
-                    // first_value: Some(1),
-                    values: vec!["final".to_string(), "dev".to_string()],
-                    ..VersionComponentSpec::default()
-                },
-            ),
-            (
-                "dev_n".to_string(),
-                VersionComponentSpec {
-                    // first_value: Some(1),
-                    ..VersionComponentSpec::default()
-                },
-            ),
-            (
-                "local".to_string(),
-                VersionComponentSpec {
-                    independent: Some(true),
-                    ..VersionComponentSpec::default()
-                },
-            ),
-        ]
-        .into_iter()
-        .collect(),
-    };
+                    [
+                        Value::Argument("major".to_string()),
+                        Value::String(".".to_string()),
+                        Value::Argument("minor".to_string()),
+                        Value::String(".".to_string()),
+                        Value::Argument("patch".to_string()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ]),
+                search: Some(RegexTemplate::Escaped(
+                    [Value::Argument("current_version".to_string())]
+                        .into_iter()
+                        .collect(),
+                )),
+                replace: Some("{new_version}".to_string()),
+                ..GlobalConfig::empty()
+            },
+            files: vec![].into_iter().collect(),
+            components: [
+                (
+                    "pre_label".to_string(),
+                    VersionComponentSpec {
+                        values: vec![
+                            "final".to_string(),
+                            "a".to_string(),
+                            "b".to_string(),
+                            "rc".to_string(),
+                        ],
+                        ..VersionComponentSpec::default()
+                    },
+                ),
+                (
+                    "pre_n".to_string(),
+                    VersionComponentSpec {
+                        // first_value: Some(1),
+                        ..VersionComponentSpec::default()
+                    },
+                ),
+                (
+                    "post_label".to_string(),
+                    VersionComponentSpec {
+                        values: vec!["final".to_string(), "post".to_string()],
+                        ..VersionComponentSpec::default()
+                    },
+                ),
+                (
+                    "post_n".to_string(),
+                    VersionComponentSpec {
+                        // first_value: Some(1),
+                        ..VersionComponentSpec::default()
+                    },
+                ),
+                (
+                    "dev_label".to_string(),
+                    VersionComponentSpec {
+                        // first_value: Some(1),
+                        values: vec!["final".to_string(), "dev".to_string()],
+                        ..VersionComponentSpec::default()
+                    },
+                ),
+                (
+                    "dev_n".to_string(),
+                    VersionComponentSpec {
+                        // first_value: Some(1),
+                        ..VersionComponentSpec::default()
+                    },
+                ),
+                (
+                    "local".to_string(),
+                    VersionComponentSpec {
+                        independent: Some(true),
+                        ..VersionComponentSpec::default()
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        };
 
-    let mut config = config.ok_or_else(|| eyre::eyre!("expected parsed bumpversion config"))?;
+        let mut config = config.ok_or_else(|| eyre::eyre!("expected parsed bumpversion config"))?;
 
-    let actual_parse_pattern = config
-        .global
-        .parse_version_pattern
-        .as_ref()
-        .map(|regex| unindent::unindent(regex.as_str()));
-    let expected_parse_pattern = expected
-        .global
-        .parse_version_pattern
-        .as_ref()
-        .map(|regex| unindent::unindent(regex.as_str()));
-    sim_assert_eq!(actual_parse_pattern, expected_parse_pattern);
+        let actual_parse_pattern = config
+            .global
+            .parse_version_pattern
+            .as_ref()
+            .map(|regex| unindent::unindent(regex.as_str()));
+        let expected_parse_pattern = expected
+            .global
+            .parse_version_pattern
+            .as_ref()
+            .map(|regex| unindent::unindent(regex.as_str()));
+        sim_assert_eq!(actual_parse_pattern, expected_parse_pattern);
 
-    config.global.parse_version_pattern = None;
-    expected.global.parse_version_pattern = None;
-    sim_assert_eq!(config.global, expected.global);
-    sim_assert_eq!(config.files, expected.files);
+        config.global.parse_version_pattern = None;
+        expected.global.parse_version_pattern = None;
+        sim_assert_eq!(config.global, expected.global);
+        sim_assert_eq!(config.files, expected.files);
 
-    let actual_components: std::collections::BTreeMap<_, _> = config.components.into_iter().collect();
-    let expected_components: std::collections::BTreeMap<_, _> =
-        expected.components.into_iter().collect();
-    sim_assert_eq!(actual_components, expected_components);
-    Ok(())
-}
-#[test]
-fn parse_compat_regex_test_config_toml() -> eyre::Result<()> {
-    crate::tests::init();
+        let actual_components: std::collections::BTreeMap<_, _> =
+            config.components.into_iter().collect();
+        let expected_components: std::collections::BTreeMap<_, _> =
+            expected.components.into_iter().collect();
+        sim_assert_eq!(actual_components, expected_components);
+        Ok(())
+    }
+    #[test]
+    fn parse_compat_regex_test_config_toml() -> eyre::Result<()> {
+        crate::tests::init();
 
-    let bumpversion_toml = indoc::indoc! {r#"
+        let bumpversion_toml = indoc::indoc! {r#"
         [tool.bumpversion]
         current_version = "4.7.1"
         regex = true
@@ -898,40 +899,40 @@ fn parse_compat_regex_test_config_toml() -> eyre::Result<()> {
         replace = "date-released: {utcnow:%Y-%m-%d}"
     "#};
 
-    let config = parse_toml(bumpversion_toml, &Printer::default())?.0?;
+        let config = parse_toml(bumpversion_toml, &Printer::default())?.0?;
 
-    let expected = Config {
-        global: GlobalConfig {
-            // regex: Some(true),
-            current_version: Some("4.7.1".to_string()),
-            ..GlobalConfig::empty()
-        },
-        files: vec![(
-            InputFile::Path("./citation.cff".into()),
-            FileConfig {
-                search: Some(RegexTemplate::Regex(
-                    [Value::String(
-                        r"date-released: \d{4}-\d{2}-\d{2}".to_string(),
-                    )]
-                    .into_iter()
-                    .collect(),
-                )),
-                replace: Some("date-released: {utcnow:%Y-%m-%d}".to_string()),
+        let expected = Config {
+            global: GlobalConfig {
                 // regex: Some(true),
-                ..FileConfig::empty()
+                current_version: Some("4.7.1".to_string()),
+                ..GlobalConfig::empty()
             },
-        )],
-        components: [].into_iter().collect(),
-    };
-    sim_assert_eq!(config, Some(expected));
-    Ok(())
-}
+            files: vec![(
+                InputFile::Path("./citation.cff".into()),
+                FileConfig {
+                    search: Some(RegexTemplate::Regex(
+                        [Value::String(
+                            r"date-released: \d{4}-\d{2}-\d{2}".to_string(),
+                        )]
+                        .into_iter()
+                        .collect(),
+                    )),
+                    replace: Some("date-released: {utcnow:%Y-%m-%d}".to_string()),
+                    // regex: Some(true),
+                    ..FileConfig::empty()
+                },
+            )],
+            components: [].into_iter().collect(),
+        };
+        sim_assert_eq!(config, Some(expected));
+        Ok(())
+    }
 
-#[test]
-fn parse_compat_regex_with_caret_config_toml() -> eyre::Result<()> {
-    crate::tests::init();
+    #[test]
+    fn parse_compat_regex_with_caret_config_toml() -> eyre::Result<()> {
+        crate::tests::init();
 
-    let bumpversion_toml = indoc::indoc! {r#"
+        let bumpversion_toml = indoc::indoc! {r#"
         [tool.bumpversion]
         current_version = "1.0.0"
         regex = true
@@ -942,40 +943,40 @@ fn parse_compat_regex_with_caret_config_toml() -> eyre::Result<()> {
         replace = "version: {new_version}"
     "#};
 
-    let config = parse_toml(bumpversion_toml, &Printer::default())?.0?;
+        let config = parse_toml(bumpversion_toml, &Printer::default())?.0?;
 
-    let expected = Config {
-        global: GlobalConfig {
-            // regex: Some(true),
-            current_version: Some("1.0.0".to_string()),
-            ..GlobalConfig::empty()
-        },
-        files: vec![(
-            InputFile::Path("thingy.yaml".into()),
-            FileConfig {
-                search: Some(RegexTemplate::Regex(
-                    [
-                        Value::String("^version: ".to_string()),
-                        Value::Argument("current_version".to_string()),
-                    ]
-                    .into_iter()
-                    .collect(),
-                )),
-                replace: Some("version: {new_version}".to_string()),
-                ..FileConfig::empty()
+        let expected = Config {
+            global: GlobalConfig {
+                // regex: Some(true),
+                current_version: Some("1.0.0".to_string()),
+                ..GlobalConfig::empty()
             },
-        )],
-        components: [].into_iter().collect(),
-    };
-    sim_assert_eq!(config, Some(expected));
-    Ok(())
-}
+            files: vec![(
+                InputFile::Path("thingy.yaml".into()),
+                FileConfig {
+                    search: Some(RegexTemplate::Regex(
+                        [
+                            Value::String("^version: ".to_string()),
+                            Value::Argument("current_version".to_string()),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    )),
+                    replace: Some("version: {new_version}".to_string()),
+                    ..FileConfig::empty()
+                },
+            )],
+            components: [].into_iter().collect(),
+        };
+        sim_assert_eq!(config, Some(expected));
+        Ok(())
+    }
 
-#[test]
-fn parse_compat_replace_date_config_toml() -> eyre::Result<()> {
-    crate::tests::init();
+    #[test]
+    fn parse_compat_replace_date_config_toml() -> eyre::Result<()> {
+        crate::tests::init();
 
-    let bumpversion_toml = indoc::indoc! {r#"
+        let bumpversion_toml = indoc::indoc! {r#"
         [tool.bumpversion]
         current_version = '1.2.3'
 
@@ -989,34 +990,32 @@ fn parse_compat_replace_date_config_toml() -> eyre::Result<()> {
         filename = 'VERSION'
     "#};
 
-    let config = parse_toml(bumpversion_toml, &Printer::default())?.0?;
+        let config = parse_toml(bumpversion_toml, &Printer::default())?.0?;
 
-    let expected = Config {
-        global: GlobalConfig {
-            current_version: Some("1.2.3".to_string()),
-            ..GlobalConfig::empty()
-        },
-        files: vec![
-            (
-                InputFile::Path("VERSION".into()),
-                FileConfig {
-                    search: Some(RegexTemplate::Regex(
-                        [Value::String(
-                            r"__date__ = '\d{4}-\d{2}-\d{2}'".to_string(),
-                        )]
-                        .into_iter()
-                        .collect(),
-                    )),
-                    replace: Some("__date__ = '{now:%Y-%m-%d}'".to_string()),
-                    // regex: Some(true),
-                    ..FileConfig::empty()
-                },
-            ),
-            (InputFile::Path("VERSION".into()), FileConfig::empty()),
-        ],
-        components: [].into_iter().collect(),
-    };
-    sim_assert_eq!(config, Some(expected));
-    Ok(())
-}
+        let expected = Config {
+            global: GlobalConfig {
+                current_version: Some("1.2.3".to_string()),
+                ..GlobalConfig::empty()
+            },
+            files: vec![
+                (
+                    InputFile::Path("VERSION".into()),
+                    FileConfig {
+                        search: Some(RegexTemplate::Regex(
+                            [Value::String(r"__date__ = '\d{4}-\d{2}-\d{2}'".to_string())]
+                                .into_iter()
+                                .collect(),
+                        )),
+                        replace: Some("__date__ = '{now:%Y-%m-%d}'".to_string()),
+                        // regex: Some(true),
+                        ..FileConfig::empty()
+                    },
+                ),
+                (InputFile::Path("VERSION".into()), FileConfig::empty()),
+            ],
+            components: [].into_iter().collect(),
+        };
+        sim_assert_eq!(config, Some(expected));
+        Ok(())
+    }
 }

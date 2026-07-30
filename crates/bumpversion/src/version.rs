@@ -31,7 +31,6 @@ pub type RawVersion<'a> = HashMap<&'a str, &'a str>;
 //     }
 // }
 
-
 /// Value parsing and bumping utilities for version components.
 pub mod values {
     /// Errors encountered when bumping value components.
@@ -46,7 +45,9 @@ pub mod values {
             allowed: Vec<String>,
         },
         /// The component has reached the maximum value in the list.
-        #[error("the component has already the maximum value among {allowed:?} and cannot be bumped")]
+        #[error(
+            "the component has already the maximum value among {allowed:?} and cannot be bumped"
+        )]
         MaxReached {
             /// The list of allowed values.
             allowed: Vec<String>,
@@ -62,7 +63,7 @@ pub mod values {
 
     impl<'a> ValuesFunction<'a> {
         /// Create a new `ValuesFunction`.
-        #[must_use] 
+        #[must_use]
         pub fn new(values: &'a [String]) -> Self {
             Self { values }
         }
@@ -909,12 +910,9 @@ mod tests {
         let components = config::version::version_component_configs(&config);
         let version_spec = VersionSpec::from_components(components);
 
-        let current_version = Version::parse(
-            "0.0.4",
-            &config.global.parse_version_pattern,
-            &version_spec,
-        )
-        .ok_or_else(|| eyre::eyre!("expected current version to parse"))?;
+        let current_version =
+            Version::parse("0.0.4", &config.global.parse_version_pattern, &version_spec)
+                .ok_or_else(|| eyre::eyre!("expected current version to parse"))?;
 
         let new_version = current_version.bump("minor")?;
         let ctx = HashMap::<String, String>::new();

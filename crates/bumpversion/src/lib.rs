@@ -187,9 +187,7 @@ where
                             path: path.clone(),
                         })
                     }
-                    config::ConfigFile::CargoToml(_) => {
-                        Ok(None)
-                    }
+                    config::ConfigFile::CargoToml(_) => Ok(None),
                 };
 
                 config_res.map(|c| c.map(|c| (config_file.clone(), c, diagnostics)))
@@ -594,9 +592,7 @@ where
                     )
                     .await
                 }
-                config::ConfigFile::CargoToml(_) => {
-                    Ok(None)
-                }
+                config::ConfigFile::CargoToml(_) => Ok(None),
             }?;
 
             Ok(modification)

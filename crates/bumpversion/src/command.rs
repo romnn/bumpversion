@@ -42,11 +42,11 @@ pub enum Error {
         output.stdout,
         output.stderr
     )]
-    Failed { 
+    Failed {
         /// Debug representation of the command that was run.
-        command: String, 
+        command: String,
         /// Captured output including status, stdout, stderr.
-        output: Output 
+        output: Output,
     },
 }
 

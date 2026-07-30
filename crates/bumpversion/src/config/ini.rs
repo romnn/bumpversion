@@ -791,8 +791,7 @@ mod tests {
             bumpversion_cfg,
             Options::default(),
             &BufferedPrinter::default(),
-        )
-        ?
+        )?
         .0?;
 
         let expected = Config {
@@ -887,8 +886,7 @@ mod tests {
             setup_cfg_ini,
             Options::default(),
             &BufferedPrinter::default(),
-        )
-        ?
+        )?
         .0?;
 
         let expected = Config {
@@ -1033,8 +1031,7 @@ mod tests {
             bumpversion_cfg,
             Options::default(),
             &BufferedPrinter::default(),
-        )
-        ?
+        )?
         .0?;
         let expected = Config {
             global: GlobalConfig {
@@ -1133,8 +1130,7 @@ mod tests {
             bumpversion_cfg,
             Options::default(),
             &BufferedPrinter::default(),
-        )
-        ?
+        )?
         .0?;
         let expected = Config {
             global: GlobalConfig {
@@ -1183,8 +1179,7 @@ mod tests {
             bumpversion_cfg,
             Options::default(),
             &BufferedPrinter::default(),
-        )
-        ?
+        )?
         .0?;
         let expected = Config {
             global: GlobalConfig {
