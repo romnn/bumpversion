@@ -3,8 +3,21 @@
 use assert_cmd::Command;
 use color_eyre::eyre;
 use predicates::prelude::*;
+use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
+
+/// The usage line clap prints for `subcommand`.
+///
+/// clap derives the usage line from the file name of `argv[0]`, which carries a
+/// `.exe` suffix on Windows.
+fn usage(subcommand: &str) -> String {
+    let bin = Path::new(env!("CARGO_BIN_EXE_bumpversion"))
+        .file_name()
+        .unwrap_or_else(|| OsStr::new("bumpversion"))
+        .to_string_lossy();
+    format!("Usage: {bin} {subcommand}")
+}
 
 fn git_init(dir: &Path) -> eyre::Result<()> {
     let output = std::process::Command::new("git")
@@ -21,7 +34,7 @@ fn test_show_help() {
     cmd.arg("show").arg("--help");
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Usage: bumpversion show"));
+        .stdout(predicate::str::contains(usage("show")));
 }
 
 #[test]
@@ -30,7 +43,7 @@ fn test_show_bump_help() {
     cmd.arg("show-bump").arg("--help");
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("Usage: bumpversion show-bump"));
+        .stdout(predicate::str::contains(usage("show-bump")));
 }
 
 #[test]
