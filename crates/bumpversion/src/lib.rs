@@ -81,9 +81,9 @@ use crate::{
 use colored::{Color, Colorize};
 use files::IoError;
 use futures::stream::{StreamExt, TryStreamExt};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use logging::{LogExt, Verbosity};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -643,7 +643,10 @@ where
             .and_then(shlex::split)
             .unwrap_or_default();
 
-        let mut files_to_commit: HashSet<&Path> = configured_files
+        // Insertion-ordered: the staged files are logged in this order, and a set
+        // whose iteration order varies between runs would make the verbose report
+        // differ from one identical invocation to the next.
+        let mut files_to_commit: IndexSet<&Path> = configured_files
             .keys()
             .map(PathBuf::as_path)
             .chain(additional_files.iter().map(std::convert::AsRef::as_ref))

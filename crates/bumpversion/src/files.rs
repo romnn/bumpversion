@@ -339,7 +339,12 @@ fn resolve_glob_files(
         .flat_map(std::iter::IntoIterator::into_iter)
         .collect::<Result<_, _>>()?;
 
-    Ok(included.difference(&excluded).cloned().collect())
+    // Sorted: `glob` yields matches in an unspecified order and the set difference
+    // discards it entirely, so without this the files of one glob entry would be
+    // rewritten — and logged — in a different order on every run.
+    let mut matched: Vec<PathBuf> = included.difference(&excluded).cloned().collect();
+    matched.sort();
+    Ok(matched)
 }
 
 /// Mapping from file paths to the list of version `FileChange`s to apply.
