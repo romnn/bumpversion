@@ -287,6 +287,7 @@ dependencies = [
  "color-eyre",
  "colored",
  "futures",
+ "indoc",
  "predicates",
  "tempfile",
  "termcolor",

@@ -2,6 +2,7 @@
 
 use assert_cmd::Command;
 use color_eyre::eyre;
+use indoc::indoc;
 use predicates::prelude::*;
 use std::ffi::OsStr;
 use std::fs;
@@ -491,6 +492,53 @@ post_commit_hooks = ["echo post > post.txt"]
 
     assert_eq!(fs::read_to_string(temp.path().join("pre.txt"))?, "pre\n");
     assert_eq!(fs::read_to_string(temp.path().join("post.txt"))?, "post\n");
+    Ok(())
+}
+
+#[test]
+fn test_pre_commit_hook_additional_file_reaches_commit() -> eyre::Result<()> {
+    let temp = repo_with(
+        ".bumpversion.toml",
+        indoc! {r#"
+            [tool.bumpversion]
+            current_version = "1.0.0"
+            commit = true
+            tag = false
+            pre_commit_hooks = ['printf "version=%s\n" "$BVHOOK_NEW_VERSION" > Cargo.lock']
+            additional_files = ["Cargo.lock"]
+
+            [[tool.bumpversion.files]]
+            filename = "VERSION"
+        "#},
+    )?;
+    fs::write(temp.path().join("VERSION"), "1.0.0")?;
+    fs::write(temp.path().join("Cargo.lock"), "version=1.0.0\n")?;
+    git_commit_all(temp.path())?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path()).args(["bump", "minor"]);
+    cmd.assert().success();
+
+    let committed_lock = std::process::Command::new("git")
+        .args(["show", "HEAD:Cargo.lock"])
+        .current_dir(temp.path())
+        .output()?;
+    eyre::ensure!(
+        committed_lock.status.success(),
+        "failed to read committed Cargo.lock: {}",
+        String::from_utf8_lossy(&committed_lock.stderr)
+    );
+    assert_eq!(String::from_utf8(committed_lock.stdout)?, "version=1.1.0\n");
+    let status = std::process::Command::new("git")
+        .args(["status", "--short"])
+        .current_dir(temp.path())
+        .output()?;
+    eyre::ensure!(status.status.success(), "failed to inspect git status");
+    assert!(
+        status.stdout.is_empty(),
+        "hook-generated files must not remain outside the bump commit: {}",
+        String::from_utf8_lossy(&status.stdout)
+    );
     Ok(())
 }
 
