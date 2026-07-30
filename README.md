@@ -6,6 +6,8 @@
 [<img alt="docs.rs" src="https://img.shields.io/docsrs/bumpversion/latest?label=docs.rs">](https://docs.rs/bumpversion)
 [<img alt="crates.io" src="https://img.shields.io/crates/v/bumpversion">](https://crates.io/crates/bumpversion)
 
+📚 **Documentation: [romnn.github.io/bumpversion](https://romnn.github.io/bumpversion/)**
+
 This is an improved version of the popular [callowayproject/bump-my-version](https://github.com/callowayproject/bump-my-version) (formerly [peritus/bumpversion](https://github.com/peritus/bumpversion) and [c4urself/bump2version](https://github.com/c4urself/bump2version)) written in Rust.
 
 #### Features
@@ -34,7 +36,17 @@ cargo install --locked bumpversion-cli
 ### CLI usage
 
 You can use this as a drop-in replacement for the Python `bumpversion`, `bump2version`, or `bump-my-version`.
-For usage instructions, please refer to [the Python version](https://github.com/callowayproject/bump-my-version).
+
+```bash
+# Show every change a patch release would make, without making it
+bumpversion --dry-run --verbose patch
+
+# Do it: rewrite the files, commit, tag
+bumpversion patch
+```
+
+See the [documentation](https://romnn.github.io/bumpversion/) for the configuration reference, the
+version-scheme model, and hooks.
 
 #### Development
 
