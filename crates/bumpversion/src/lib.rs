@@ -706,7 +706,10 @@ where
             );
 
             if !self.config.global.dry_run {
-                let env = std::env::vars().chain([
+                // Only the commit-specific variables. `git` inherits the rest from
+                // this process, so copying them in adds nothing and would expose
+                // them in any `Debug` rendering of the command.
+                let env = [
                     ("HGENCODING".to_string(), "utf-8".to_string()),
                     (
                         "BUMPVERSION_CURRENT_VERSION".to_string(),
@@ -716,7 +719,7 @@ where
                         "BUMPVERSION_NEW_VERSION".to_string(),
                         next_version_serialized,
                     ),
-                ]);
+                ];
                 self.repo
                     .commit(commit_message.as_str(), extra_args.as_slice(), env)
                     .await

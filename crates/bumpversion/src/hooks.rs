@@ -98,17 +98,24 @@ fn new_version_env<'a>(
 }
 
 /// Provide the environment dictionary for `setup_hook`s.
+///
+/// Only the hook-specific variables are listed.
+///
+/// The child inherits the caller's environment on its own, so copying it in adds
+/// nothing and would place every exported secret in the command's `Debug` output.
 fn setup_hook_env<'a>(
     tag_and_revision: &'a TagAndRevision,
     current_version: Option<&'a Version>,
 ) -> impl Iterator<Item = (String, String)> + use<'a> {
-    std::env::vars()
-        .chain(base_env())
+    base_env()
         .chain(vcs_env(tag_and_revision))
         .chain(version_env(current_version, "CURRENT_"))
 }
 
 /// Provide the environment dictionary for `pre_commit_hook` and `post_commit_hook`s
+///
+/// As with [`setup_hook_env`], the caller's own environment is inherited rather
+/// than copied in.
 fn pre_and_post_commit_hook_env<'a>(
     tag_and_revision: &'a TagAndRevision,
     current_version: Option<&'a Version>,
@@ -116,8 +123,7 @@ fn pre_and_post_commit_hook_env<'a>(
     new_version_serialized: &str,
     new_version_tag: Option<&str>,
 ) -> impl Iterator<Item = (String, String)> + use<'a> {
-    std::env::vars()
-        .chain(base_env())
+    base_env()
         .chain(vcs_env(tag_and_revision))
         .chain(version_env(current_version, "CURRENT_"))
         .chain(version_env(new_version, "NEW_"))
