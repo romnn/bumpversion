@@ -102,7 +102,7 @@ Per-file, `ignore_missing_file` (singular) is accepted as well.
 additional_files = ["Cargo.lock", "CHANGELOG.md"]
 ```
 
-Without this, a hook's changes would be left uncommitted in the working tree after the release commit.
+Without this, a hook's changes would be left uncommitted in the working tree after the release commit. For a Rust project, [Cargo.lock in the release commit]({{< relref "hooks.md" >}}#rust-keeping-cargolock-in-the-release-commit) shows the whole pattern — the hook that refreshes the lockfile and the entry that stages it.
 
 ## Restricting the run
 

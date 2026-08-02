@@ -30,11 +30,11 @@ setup_hooks = ['test "$BVHOOK_BRANCH_NAME" = main']
 **`pre_commit_hooks`** are for files that must be regenerated *from* the new version and land in the same commit — a lockfile whose package version just changed, or a changelog heading:
 
 ```toml
-pre_commit_hooks = ["cargo update --offline"]
+pre_commit_hooks = ["cargo metadata --offline --format-version 1 >/dev/null"]
 additional_files = ["Cargo.lock"]
 ```
 
-Anything a pre-commit hook writes that no `[[files]]` entry produced must also be listed in [`additional_files`]({{< relref "files.md" >}}#extra-files-in-the-commit), or it will not be staged.
+Anything a pre-commit hook writes that no `[[files]]` entry produced must also be listed in [`additional_files`]({{< relref "files.md" >}}#extra-files-in-the-commit), or it will not be staged. That lockfile case is worked through in full [below](#rust-keeping-cargolock-in-the-release-commit).
 
 **`post_commit_hooks`** run once the release exists — publishing, notifying, or kicking off a build. A failure here aborts the run but cannot undo the commit and tag that already happened.
 
@@ -72,3 +72,29 @@ Because a hook is a single string handed to `sh -c`, anything beyond one command
 {{< example path="hooks/scripts/changelog.sh" lang="bash" >}}
 
 Keep hooks idempotent where you can. A bump that fails partway leaves the earlier hooks' effects in place, and the natural response is to fix the problem and run it again.
+
+## Rust: keeping Cargo.lock in the release commit
+
+Bumping the version in `Cargo.toml` leaves `Cargo.lock` stale — it still records the workspace crates at the old version — and most projects want both in one commit. Any cargo command that resolves the workspace rewrites the lockfile, so the job needs nothing more than the cheapest one:
+
+```toml
+[tool.bumpversion]
+current_version = "1.4.2"
+commit = true
+tag = true
+
+pre_commit_hooks = ["cargo metadata --offline --format-version 1 >/dev/null"]
+additional_files = ["Cargo.lock"]
+
+[[tool.bumpversion.files]]
+filename = "Cargo.toml"
+```
+
+`cargo metadata` resolves the workspace, writes the refreshed lockfile, and prints a JSON dump the hook throws away. `--format-version 1` silences cargo's warning about the unpinned output format, and `--offline` keeps the hook off the network. Drop `--offline` if the bump may run somewhere the dependency cache is cold.
+
+> [!WARNING]
+> Do not reach for `cargo update` here. It re-resolves **every** dependency to the newest version your requirements allow, so a release bump quietly becomes a dependency bump — which defeats a pinning or cooldown policy meant to slow supply-chain attacks down.
+>
+> It can also fail outright: re-resolving an unpinned git dependency looks at the cached checkout's branch tip, which may no longer contain the package the lockfile pins. The bump then aborts *after* the files were rewritten, leaving the new version in the tree with no commit.
+>
+> `cargo update --workspace --offline` is the narrow form and does restrict itself to the workspace crates, but it is still an update command. `cargo metadata` cannot move a dependency even by accident.

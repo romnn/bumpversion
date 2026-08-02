@@ -45,6 +45,30 @@ bumpversion --dry-run --verbose patch
 bumpversion patch
 ```
 
+### Rust projects
+
+Bumping the version in `Cargo.toml` leaves `Cargo.lock` stale. A pre-commit hook refreshes it, and
+`additional_files` carries it into the same release commit:
+
+```toml
+[tool.bumpversion]
+current_version = "1.4.2"
+commit = true
+tag = true
+
+pre_commit_hooks = ["cargo metadata --offline --format-version 1 >/dev/null"]
+additional_files = ["Cargo.lock"]
+
+[[tool.bumpversion.files]]
+filename = "Cargo.toml"
+```
+
+`cargo metadata` rewrites the lockfile as a side effect of resolving the workspace. Prefer it over
+`cargo update`, which re-resolves every dependency and turns a release into an unreviewed dependency
+upgrade. The [hooks documentation][lockfile] works the pattern through in full.
+
+[lockfile]: https://romnn.github.io/bumpversion/docs/configuration/hooks/#rust-keeping-cargolock-in-the-release-commit
+
 See the [documentation](https://romnn.github.io/bumpversion/) for the configuration reference, the
 version-scheme model, and hooks.
 
