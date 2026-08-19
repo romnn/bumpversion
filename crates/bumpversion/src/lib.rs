@@ -241,12 +241,24 @@ where
     /// Current version was not found in configuration or tags.
     #[error("missing current version")]
     MissingCurrentVersion,
+    /// No previous tagged version is available for finalization.
+    #[error("cannot finalize without a previous tagged version")]
+    MissingPreviousVersion,
+    /// The configured version already matches the latest tag.
+    #[error("version {0} is already tagged")]
+    AlreadyFinalized(String),
     /// Parsed version string was empty or invalid.
     #[error("version is empty")]
     EmptyVersion,
-    /// A configured hook (setup, pre-commit, or post-commit) failed.
-    #[error("failed to run hook")]
-    Hook(#[from] crate::hooks::Error),
+    /// A configured setup hook failed.
+    #[error("setup hook failed")]
+    SetupHook(#[source] crate::hooks::Error),
+    /// A configured pre-commit hook failed.
+    #[error("pre-commit hook failed")]
+    PreCommitHook(#[source] crate::hooks::Error),
+    /// A configured post-commit hook failed.
+    #[error("post-commit hook failed")]
+    PostCommitHook(#[source] crate::hooks::Error),
     /// An error occurred while bumping the version component.
     #[error("failed to bump version")]
     Bump(#[from] crate::version::BumpError),
@@ -339,6 +351,39 @@ where
     VCS: VersionControlSystem,
     L: logging::Log,
 {
+    fn configured_files(&self) -> FileMap {
+        files::files_to_modify(&self.config, self.file_map.clone()).collect()
+    }
+
+    fn additional_files(&self) -> Vec<PathBuf> {
+        self.config
+            .global
+            .additional_files
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|path| {
+                if path.is_absolute() {
+                    path.clone()
+                } else {
+                    self.repo.path().join(path)
+                }
+            })
+            .collect()
+    }
+
+    fn new_version_tag(
+        &self,
+        context: &HashMap<String, String>,
+    ) -> Result<Option<String>, BumpError<VCS>> {
+        self.config
+            .global
+            .tag
+            .then(|| self.config.global.tag_name.format(context, true))
+            .transpose()
+            .map_err(Into::into)
+    }
+
     async fn apply_version_bump(
         &self,
         bump: Bump<'_>,
@@ -359,8 +404,7 @@ where
             tracing::info!("dry run active, won't touch any files.");
         }
 
-        let mut configured_files: IndexMap<PathBuf, Vec<config::change::FileChange>> =
-            files::files_to_modify(&self.config, self.file_map.clone()).collect();
+        let mut configured_files = self.configured_files();
 
         // filter the files that are not valid for this bump
         if let Bump::Component(version_component_to_bump) = bump {
@@ -406,16 +450,7 @@ where
 
         // The tag this bump is about to create, so hooks see the new name rather
         // than the one already on the repository. `None` when tagging is off.
-        let new_version_tag = if self.config.global.tag {
-            Some(
-                self.config
-                    .global
-                    .tag_name
-                    .format(&ctx_with_new_version, true)?,
-            )
-        } else {
-            None
-        };
+        let new_version_tag = self.new_version_tag(&ctx_with_new_version)?;
 
         self.run_pre_commit_hooks(
             Some(&current_version),
@@ -423,23 +458,10 @@ where
             &new_version_serialized,
             new_version_tag.as_deref(),
         )
-        .await?;
+        .await
+        .map_err(BumpError::PreCommitHook)?;
 
-        let additional_files: Vec<_> = self
-            .config
-            .global
-            .additional_files
-            .as_deref()
-            .unwrap_or_default()
-            .iter()
-            .map(|path| {
-                if path.is_absolute() {
-                    path.clone()
-                } else {
-                    self.repo.path().join(path)
-                }
-            })
-            .collect();
+        let additional_files = self.additional_files();
 
         // TODO: warn for files that dirty but not in either configured or additional files
         self.commit_changes(
@@ -457,7 +479,8 @@ where
             &new_version_serialized,
             new_version_tag.as_deref(),
         )
-        .await?;
+        .await
+        .map_err(BumpError::PostCommitHook)?;
 
         Ok(())
     }
@@ -508,7 +531,9 @@ where
             ),
         );
 
-        self.run_setup_hooks(Some(&current_version)).await?;
+        self.run_setup_hooks(Some(&current_version))
+            .await
+            .map_err(BumpError::SetupHook)?;
 
         let new_version = match bump {
             Bump::Component(comp_name) => {
@@ -563,6 +588,90 @@ where
             new_version_serialized,
         )
         .await
+    }
+
+    /// Finalizes a version bump that is already applied to the working tree.
+    ///
+    /// The latest VCS tag supplies the previous version, and the configured current version is the
+    /// release target.
+    /// This method does not replace version strings or rerun setup hooks.
+    /// It reruns pre-commit hooks before committing configured and additional files, creates the
+    /// configured tag, and then runs post-commit hooks.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when either version is unavailable or invalid, the configured version is
+    /// already tagged, a hook fails, a template cannot be rendered, or the VCS operation fails.
+    pub async fn finalize(&self) -> Result<(), BumpError<VCS>> {
+        let new_version_serialized = self
+            .config
+            .global
+            .current_version
+            .as_ref()
+            .ok_or(BumpError::MissingCurrentVersion)?;
+        let current_version_serialized = self
+            .tag_and_revision
+            .tag
+            .as_ref()
+            .map(|tag| &tag.current_version)
+            .ok_or(BumpError::MissingPreviousVersion)?;
+
+        if current_version_serialized == new_version_serialized {
+            return Err(BumpError::AlreadyFinalized(new_version_serialized.clone()));
+        }
+
+        let parse_version_pattern = &self.config.global.parse_version_pattern;
+        let version_spec = version::VersionSpec::from_components(self.components.clone());
+        let current_version = version::Version::parse(
+            current_version_serialized,
+            parse_version_pattern,
+            &version_spec,
+        )
+        .ok_or(BumpError::EmptyVersion)?;
+        let new_version =
+            version::Version::parse(new_version_serialized, parse_version_pattern, &version_spec)
+                .ok_or(BumpError::EmptyVersion)?;
+
+        let context: HashMap<String, String> = context::get_context(
+            Some(&self.tag_and_revision),
+            Some(&current_version),
+            Some(&new_version),
+            Some(current_version_serialized),
+            Some(new_version_serialized),
+        )
+        .collect();
+        let new_version_tag = self.new_version_tag(&context)?;
+
+        self.run_pre_commit_hooks(
+            Some(&current_version),
+            Some(&new_version),
+            new_version_serialized,
+            new_version_tag.as_deref(),
+        )
+        .await
+        .map_err(BumpError::PreCommitHook)?;
+
+        let configured_files = self.configured_files();
+        let additional_files = self.additional_files();
+        self.commit_changes(
+            &configured_files,
+            &additional_files,
+            current_version_serialized.clone(),
+            new_version_serialized.clone(),
+            &context,
+        )
+        .await?;
+
+        self.run_post_commit_hooks(
+            Some(&current_version),
+            Some(&new_version),
+            new_version_serialized,
+            new_version_tag.as_deref(),
+        )
+        .await
+        .map_err(BumpError::PostCommitHook)?;
+
+        Ok(())
     }
 
     /// Update the version string in the bumpversion configuration file.

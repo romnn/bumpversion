@@ -3,10 +3,60 @@
 //! Sets up logging, loads configuration, and orchestrates the bump process.
 use crate::options;
 use bumpversion::{
-    config,
+    BumpError,
+    command::Error as CommandError,
+    config, hooks,
     vcs::{TagAndRevision, VersionControlSystem, git::GitRepository},
 };
 use color_eyre::eyre::{self, WrapErr};
+use std::process::ExitCode;
+
+fn render_pre_commit_failure(error: &hooks::Error) -> String {
+    let mut sections = match error {
+        hooks::Error::Command(CommandError::Failed { command, output }) => {
+            let exit_code = output
+                .status
+                .code()
+                .map_or_else(|| "unknown".to_string(), |code| code.to_string());
+            let mut sections = vec![
+                format!("Pre-commit hook failed with exit code {exit_code}:"),
+                format!("  {command}"),
+            ];
+            if !output.stdout.is_empty() {
+                sections.push(format!("Stdout:\n{}", output.stdout.trim_end()));
+            }
+            if !output.stderr.is_empty() {
+                sections.push(format!("Stderr:\n{}", output.stderr.trim_end()));
+            }
+            sections
+        }
+        _ => vec![format!("Pre-commit hook failed:\n  {error}")],
+    };
+
+    sections.push("The version changes are still in your working tree.".to_string());
+    sections.push(
+        "Either revert them and start over, or fix the issue and run:\n  bumpversion finalize --allow-dirty"
+            .to_string(),
+    );
+    sections.join("\n\n")
+}
+
+/// Prints a CLI result and returns the corresponding process exit code.
+pub(crate) fn report_result(result: eyre::Result<()>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            if let Some(BumpError::PreCommitHook(source)) =
+                error.downcast_ref::<BumpError<GitRepository>>()
+            {
+                eprintln!("{}", render_pre_commit_failure(source));
+            } else {
+                eprintln!("{error:?}");
+            }
+            ExitCode::FAILURE
+        }
+    }
+}
 
 /// Ensure the working directory is clean, unless `allow_dirty` is set.
 ///
@@ -132,16 +182,11 @@ pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
         config_file: Some(config_file_path),
     };
 
-    if let Some(command) = options.command {
-        match command {
-            options::SubCommand::Show(show_options) => {
-                return handle_show(&show_options, &manager);
-            }
-            options::SubCommand::ShowBump(show_bump_options) => {
-                return handle_show_bump(&show_bump_options, &manager);
-            }
-            _ => {}
-        }
+    if let Some(command) = options.command
+        && handle_subcommand(command, &manager).await?
+    {
+        tracing::info!(elapsed = ?start.elapsed(), "done");
+        return Ok(());
     }
 
     let bump = if let Some(new_version) = options.new_version.as_deref() {
@@ -157,6 +202,30 @@ pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
 
     tracing::info!(elapsed = ?start.elapsed(), "done");
     Ok(())
+}
+
+async fn handle_subcommand<L>(
+    command: options::SubCommand,
+    manager: &bumpversion::BumpVersion<GitRepository, L>,
+) -> eyre::Result<bool>
+where
+    L: bumpversion::logging::Log,
+{
+    match command {
+        options::SubCommand::Show(show_options) => {
+            handle_show(&show_options, manager)?;
+            Ok(true)
+        }
+        options::SubCommand::ShowBump(show_bump_options) => {
+            handle_show_bump(&show_bump_options, manager)?;
+            Ok(true)
+        }
+        options::SubCommand::Finalize => {
+            manager.finalize().await?;
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
 }
 
 fn handle_show<VCS, L>(

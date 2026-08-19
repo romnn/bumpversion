@@ -26,6 +26,9 @@ pub enum SubCommand {
     Minor,
     #[clap(name = "patch")]
     Patch,
+    /// Commit and tag an already-applied version bump without replacing versions.
+    #[clap(name = "finalize")]
+    Finalize,
     #[clap(name = "show")]
     Show(ShowOptions),
     #[clap(name = "show-bump")]
@@ -409,7 +412,7 @@ pub fn parse_positional_arguments(
                 bump = Some(opts.component.clone());
                 cli_files.extend(opts.args.iter().map(PathBuf::from));
             }
-            SubCommand::Show(_) | SubCommand::ShowBump(_) => {
+            SubCommand::Finalize | SubCommand::Show(_) | SubCommand::ShowBump(_) => {
                 // These commands don't produce a 'bump' action or files in the same way
                 // They are handled separately in common.rs
             }

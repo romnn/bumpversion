@@ -6,12 +6,13 @@ bookCollapseSection: true
 
 # Commands
 
-`bumpversion` has one command that changes things and two that only report.
+`bumpversion` has commands for applying and finalizing a bump, plus two that only report.
 
 | Command | Effect |
 | --- | --- |
 | `bumpversion major` / `minor` / `patch` | Bump that component |
 | `bumpversion bump <component>` | Bump any component, including one you defined |
+| `bumpversion finalize` | Commit and tag a bump already applied to the working tree |
 | `bumpversion show [<variable>...]` | Print resolved config and repository state |
 | `bumpversion show-bump <component>` | Print what the next version would be |
 

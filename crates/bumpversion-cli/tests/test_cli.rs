@@ -468,6 +468,133 @@ fn git_commit_all(dir: &Path) -> eyre::Result<()> {
     Ok(())
 }
 
+/// `finalize` resumes after replacements and pre-commit checks without applying another bump.
+#[test]
+fn test_finalize_commits_and_tags_an_applied_bump() -> eyre::Result<()> {
+    let temp = tempfile::tempdir()?;
+    let config_path = temp.path().join(".bumpversion.toml");
+    let initial_config = indoc! {r#"
+        [tool.bumpversion]
+        current_version = "1.2.3"
+        commit = true
+        tag = true
+        pre_commit_hooks = ['printf "%s->%s\n" "$BVHOOK_CURRENT_VERSION" "$BVHOOK_NEW_VERSION" > Cargo.lock']
+        additional_files = ["Cargo.lock"]
+
+        [[tool.bumpversion.files]]
+        filename = "VERSION"
+    "#};
+    fs::write(&config_path, initial_config)?;
+    fs::write(temp.path().join("VERSION"), "1.2.3\n")?;
+    fs::write(temp.path().join("Cargo.lock"), "1.2.3->pending\n")?;
+    git_init(temp.path())?;
+    git_commit_all(temp.path())?;
+
+    let tag = std::process::Command::new("git")
+        .args(["tag", "v1.2.3"])
+        .current_dir(temp.path())
+        .output()?;
+    eyre::ensure!(
+        tag.status.success(),
+        "failed to tag previous version: {}",
+        String::from_utf8_lossy(&tag.stderr)
+    );
+
+    fs::write(&config_path, initial_config.replace("1.2.3", "1.2.4"))?;
+    fs::write(temp.path().join("VERSION"), "1.2.4\n")?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path())
+        .args(["finalize", "--allow-dirty"]);
+    cmd.assert().success();
+
+    assert_eq!(fs::read_to_string(temp.path().join("VERSION"))?, "1.2.4\n");
+    assert_eq!(
+        fs::read_to_string(temp.path().join("Cargo.lock"))?,
+        "1.2.3->1.2.4\n"
+    );
+
+    let subject = std::process::Command::new("git")
+        .args(["log", "-1", "--format=%s"])
+        .current_dir(temp.path())
+        .output()?;
+    eyre::ensure!(subject.status.success(), "failed to read release commit");
+    assert_eq!(
+        String::from_utf8(subject.stdout)?.trim(),
+        "Bump version: 1.2.3 → 1.2.4"
+    );
+
+    let tags = std::process::Command::new("git")
+        .args(["tag", "--points-at", "HEAD"])
+        .current_dir(temp.path())
+        .output()?;
+    eyre::ensure!(tags.status.success(), "failed to inspect release tag");
+    assert_eq!(String::from_utf8(tags.stdout)?.trim(), "v1.2.4");
+
+    let status = std::process::Command::new("git")
+        .args(["status", "--short"])
+        .current_dir(temp.path())
+        .output()?;
+    eyre::ensure!(status.status.success(), "failed to inspect git status");
+    assert!(
+        status.stdout.is_empty(),
+        "finalized repository must be clean"
+    );
+    Ok(())
+}
+
+/// A failed pre-commit check prints its output once and ends with recovery instructions.
+#[test]
+fn test_pre_commit_failure_has_recovery_guidance() -> eyre::Result<()> {
+    let temp = tempfile::tempdir()?;
+    fs::write(
+        temp.path().join(".bumpversion.toml"),
+        indoc! {r#"
+            [tool.bumpversion]
+            current_version = "1.2.3"
+            commit = true
+            tag = true
+            pre_commit_hooks = ['printf "check stdout\n"; printf "check stderr\n" >&2; exit 7']
+
+            [[tool.bumpversion.files]]
+            filename = "VERSION"
+        "#},
+    )?;
+    fs::write(temp.path().join("VERSION"), "1.2.3\n")?;
+    git_init(temp.path())?;
+    git_commit_all(temp.path())?;
+
+    let tag = std::process::Command::new("git")
+        .args(["tag", "v1.2.3"])
+        .current_dir(temp.path())
+        .output()?;
+    eyre::ensure!(tag.status.success(), "failed to tag previous version");
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path()).args(["bump", "minor"]);
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "Pre-commit hook failed with exit code 7:",
+        ))
+        .stderr(predicate::str::contains("Stdout:\ncheck stdout"))
+        .stderr(predicate::str::contains("Stderr:\ncheck stderr"))
+        .stderr(predicate::str::contains("WARN bumpversion::hooks").not())
+        .stderr(predicate::str::contains("Backtrace omitted").not())
+        .stderr(predicate::str::ends_with(
+            "Either revert them and start over, or fix the issue and run:\n  bumpversion finalize --allow-dirty\n",
+        ));
+
+    assert_eq!(fs::read_to_string(temp.path().join("VERSION"))?, "1.3.0\n");
+    let tags = std::process::Command::new("git")
+        .args(["tag", "--points-at", "HEAD"])
+        .current_dir(temp.path())
+        .output()?;
+    eyre::ensure!(tags.status.success(), "failed to inspect tags");
+    assert_eq!(String::from_utf8(tags.stdout)?.trim(), "v1.2.3");
+    Ok(())
+}
+
 /// Hook scripts were shlex-split before being handed to `sh -c`, which takes the
 /// whole script as one argument — so only the first word ran and the rest became
 /// positional parameters. Any hook with arguments or a redirect did nothing.

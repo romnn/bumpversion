@@ -43,6 +43,9 @@ bumpversion --dry-run --verbose patch
 
 # Do it: rewrite the files, commit, tag
 bumpversion patch
+
+# Resume commit and tag after fixing a failed pre-commit hook
+bumpversion finalize --allow-dirty
 ```
 
 ### Rust projects

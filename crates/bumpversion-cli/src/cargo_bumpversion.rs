@@ -13,6 +13,7 @@ mod verbose;
 use clap::Parser;
 use color_eyre::eyre;
 use std::ffi::{OsStr, OsString};
+use std::process::ExitCode;
 
 /// The subcommand name cargo injects, derived from this binary's own name so it
 /// stays correct if the binary is renamed.
@@ -49,12 +50,16 @@ where
 
 /// Main entry point for `cargo-bumpversion`.
 #[tokio::main]
-async fn main() -> eyre::Result<()> {
-    color_eyre::install()?;
+async fn main() -> ExitCode {
+    let result: eyre::Result<()> = async {
+        color_eyre::install()?;
 
-    let mut options = options::Options::parse_from(normalize_args(std::env::args_os()));
-    options::fix(&mut options);
-    common::bumpversion(options).await
+        let mut options = options::Options::parse_from(normalize_args(std::env::args_os()));
+        options::fix(&mut options);
+        common::bumpversion(options).await
+    }
+    .await;
+    common::report_result(result)
 }
 
 #[cfg(test)]

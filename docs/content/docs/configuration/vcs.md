@@ -28,6 +28,26 @@ This is deliberate: a release commit should contain the version bump and nothing
 
 The check is skipped for the read-only commands, [`show` and `show-bump`]({{< relref "../commands/show.md" >}}).
 
+## Finishing an interrupted bump
+
+If a pre-commit hook fails, the version replacements remain in the working tree, while the commit
+and tag are not created.
+Fix the failed check, then resume the release without replacing versions again:
+
+```bash
+bumpversion finalize --allow-dirty
+```
+
+`finalize` treats the latest tag as the previous version and the configured `current_version` as
+the release target.
+It reruns pre-commit hooks, commits the configured files and `additional_files`, creates the
+configured tag, and runs post-commit hooks.
+It does not rewrite files or rerun setup hooks.
+
+The command honors the configured `commit` and `tag` values and their command-line overrides.
+It requires an existing previous version tag and refuses to finalize when `current_version` already
+matches the latest tag.
+
 ## What gets committed
 
 Everything the run rewrote, plus the config file, plus anything in [`additional_files`]({{< relref "files.md" >}}#extra-files-in-the-commit). The verbose report lists it explicitly before the commit message:
