@@ -248,7 +248,7 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "bumpversion"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "async-process",
  "chrono",
@@ -278,7 +278,7 @@ dependencies = [
 
 [[package]]
 name = "bumpversion-cli"
-version = "0.0.10"
+version = "0.0.11"
 dependencies = [
  "assert_cmd",
  "bumpversion",
