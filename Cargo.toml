@@ -29,7 +29,7 @@ assigning_clones = "allow"
 struct_excessive_bools = "allow"
 
 [workspace.package]
-version = "0.0.11"
+version = "0.0.12"
 edition = "2024"
 authors = ["romnn <contact@romnn.com>"]
 description = "Update all version strings in your project and optionally commit and tag the changes"
