@@ -101,6 +101,56 @@ pub enum Bump<'a> {
     NewVersion(&'a str),
 }
 
+/// Parse `contents` in the format `config_file` denotes.
+///
+/// Diagnostics are appended whether or not parsing succeeds, so a failed parse can still be
+/// reported at its location in the file.
+fn parse_config(
+    config_file: &config::ConfigFile,
+    contents: &str,
+    file_id: diagnostics::FileId,
+    diagnostics: &mut Vec<codespan_reporting::diagnostic::Diagnostic<diagnostics::FileId>>,
+) -> Result<Option<config::Config>, config::Error> {
+    use diagnostics::ToDiagnostics;
+    let strict = true;
+    match config_file {
+        config::ConfigFile::BumpversionToml(path) | config::ConfigFile::PyProject(path) => {
+            let res = config::Config::from_pyproject_toml(contents, file_id, strict, diagnostics);
+            if let Err(ref err) = res {
+                diagnostics.extend(err.to_diagnostics(file_id));
+            }
+            res.map_err(|source| config::Error::Toml {
+                source,
+                path: path.clone(),
+            })
+        }
+        config::ConfigFile::BumpversionCfg(path) => {
+            let options = config::ini::Options::default();
+            let res = config::Config::from_ini(contents, options, file_id, strict, diagnostics);
+            if let Err(ref err) = res {
+                diagnostics.extend(err.to_diagnostics(file_id));
+            }
+            res.map_err(|source| config::Error::Ini {
+                source,
+                path: path.clone(),
+            })
+        }
+        config::ConfigFile::SetupCfg(path) => {
+            let options = config::ini::Options::default();
+            let res =
+                config::Config::from_setup_cfg_ini(contents, options, file_id, strict, diagnostics);
+            if let Err(ref err) = res {
+                diagnostics.extend(err.to_diagnostics(file_id));
+            }
+            res.map_err(|source| config::Error::Ini {
+                source,
+                path: path.clone(),
+            })
+        }
+        config::ConfigFile::CargoToml(_) => Ok(None),
+    }
+}
+
 /// Find config file in one of the default config file locations.
 ///
 /// When `config_file` is given, only that file is considered and the usual
@@ -119,7 +169,6 @@ where
     W: codespan_reporting::term::WriteStyle + Send + Sync + 'static,
     // W: codespan_reporting::term::termcolor::WriteColor + Send + Sync + 'static,
 {
-    use diagnostics::ToDiagnostics;
     let config_files: Vec<config::ConfigFile> = match config_file {
         Some(path) => vec![config::ConfigFile::from_path(path)],
         None => config::config_file_locations(dir).collect(),
@@ -141,68 +190,23 @@ where
 
             let file_id = printer.add_source_file(&path, config.clone());
 
+            let parsed_config_file = config_file.clone();
             let parse_config_task = tokio::task::spawn_blocking(move || {
                 let mut diagnostics = vec![];
-                let strict = true;
-
-                let config_res = match &config_file {
-                    config::ConfigFile::BumpversionToml(path)
-                    | config::ConfigFile::PyProject(path) => {
-                        let res = config::Config::from_pyproject_toml(
-                            &config,
-                            file_id,
-                            strict,
-                            &mut diagnostics,
-                        );
-                        if let Err(ref err) = res {
-                            diagnostics.extend(err.to_diagnostics(file_id));
-                        }
-                        res.map_err(|source| config::Error::Toml {
-                            source,
-                            path: path.clone(),
-                        })
-                    }
-                    config::ConfigFile::BumpversionCfg(path) => {
-                        let options = config::ini::Options::default();
-                        let res = config::Config::from_ini(
-                            &config,
-                            options,
-                            file_id,
-                            strict,
-                            &mut diagnostics,
-                        );
-                        if let Err(ref err) = res {
-                            diagnostics.extend(err.to_diagnostics(file_id));
-                        }
-                        res.map_err(|source| config::Error::Ini {
-                            source,
-                            path: path.clone(),
-                        })
-                    }
-                    config::ConfigFile::SetupCfg(path) => {
-                        let options = config::ini::Options::default();
-                        let res = config::Config::from_setup_cfg_ini(
-                            &config,
-                            options,
-                            file_id,
-                            strict,
-                            &mut diagnostics,
-                        );
-                        if let Err(ref err) = res {
-                            diagnostics.extend(err.to_diagnostics(file_id));
-                        }
-                        res.map_err(|source| config::Error::Ini {
-                            source,
-                            path: path.clone(),
-                        })
-                    }
-                    config::ConfigFile::CargoToml(_) => Ok(None),
-                };
-
-                config_res.map(|c| c.map(|c| (config_file.clone(), c, diagnostics)))
+                let config_res =
+                    parse_config(&parsed_config_file, &config, file_id, &mut diagnostics);
+                (config_res, diagnostics)
             });
 
-            parse_config_task.await?
+            let (config_res, diagnostics) = parse_config_task.await?;
+
+            // Emitted before the result is inspected: a parse error is reported at
+            // its location in the file, not only by its message.
+            for diagnostic in &diagnostics {
+                printer.emit(diagnostic).map_err(diagnostics::Error::from)?;
+            }
+
+            config_res.map(|config| config.map(|config| (config_file, config)))
         })
         .filter_map(|res| async move { res.transpose() });
 
@@ -212,13 +216,8 @@ where
         .next()
         .await
         .transpose()?
-        .map(|(config_file, mut config, diagnostics)| {
+        .map(|(config_file, mut config)| {
             use crate::config::MergeWith;
-
-            // Emit diagnostics
-            for diagnostic in &diagnostics {
-                printer.emit(diagnostic).map_err(diagnostics::Error::from)?;
-            }
 
             let mut global_config = config_overrides.clone();
             global_config.merge_with(&config.global);

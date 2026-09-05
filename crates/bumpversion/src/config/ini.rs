@@ -59,10 +59,9 @@ pub enum ParseError {
         /// Source span of the offending value.
         span: Span,
     },
-    #[error("{source}")]
+    #[error(transparent)]
     /// INI deserialization error.
     Ini {
-        #[source]
         /// Underlying INI parse error.
         source: ini::Error,
     },

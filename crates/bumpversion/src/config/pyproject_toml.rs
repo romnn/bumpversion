@@ -76,10 +76,9 @@ pub enum ParseError {
         /// Source span of the offending value.
         span: Span,
     },
-    #[error("{source}")]
+    #[error(transparent)]
     /// TOML parse error.
     Toml {
-        #[source]
         /// Underlying TOML parse error.
         source: toml_span::Error,
     },
