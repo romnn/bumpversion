@@ -205,7 +205,12 @@ fn test_config_file_flag_selects_the_file() -> eyre::Result<()> {
         .args(["show", "current_version"]);
     cmd.assert()
         .failure()
-        .stderr(predicate::str::contains("missing config file"));
+        .stderr(predicate::str::contains(
+            "error: no bumpversion configuration found in",
+        ))
+        .stderr(predicate::str::contains(
+            "bumpversion reads .bumpversion.toml, .bumpversion.cfg, pyproject.toml, setup.cfg.",
+        ));
     Ok(())
 }
 
@@ -225,6 +230,34 @@ fn test_config_file_flag_rejects_a_missing_file() -> eyre::Result<()> {
     cmd.assert()
         .failure()
         .stderr(predicate::str::contains("does not exist"));
+    Ok(())
+}
+
+/// A config that does not parse is reported at its location in the file.
+/// The diagnostics used to be dropped on the error path, and the cause was
+/// printed twice.
+#[test]
+fn test_config_parse_error_is_reported_with_its_location() -> eyre::Result<()> {
+    let temp = repo_with(
+        ".bumpversion.toml",
+        indoc! {r#"
+            [tool.bumpversion]
+            current_version = "1.2.3"
+            tag_name = "v{new_version"
+        "#},
+    )?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path())
+        .args(["show", "current_version"]);
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains(".bumpversion.toml:3:13"))
+        .stderr(predicate::str::contains("error: failed to parse"))
+        .stderr(predicate::str::contains(
+            "Caused by:\n  invalid format string\n  invalid format: \"v{new_version\"\n",
+        ))
+        .stderr(predicate::str::contains("Backtrace omitted").not());
     Ok(())
 }
 
@@ -575,14 +608,14 @@ fn test_pre_commit_failure_has_recovery_guidance() -> eyre::Result<()> {
     cmd.assert()
         .failure()
         .stderr(predicate::str::contains(
-            "Pre-commit hook failed with exit code 7:",
+            "error: pre-commit hook failed with exit code 7\n  cd ",
         ))
-        .stderr(predicate::str::contains("Stdout:\ncheck stdout"))
-        .stderr(predicate::str::contains("Stderr:\ncheck stderr"))
+        .stderr(predicate::str::contains("stdout:\n  check stdout"))
+        .stderr(predicate::str::contains("stderr:\n  check stderr"))
         .stderr(predicate::str::contains("WARN bumpversion::hooks").not())
         .stderr(predicate::str::contains("Backtrace omitted").not())
         .stderr(predicate::str::ends_with(
-            "Either revert them and start over, or fix the issue and run:\n  bumpversion finalize --allow-dirty\n",
+            "Either revert them and start over, or fix the issue and run:\n\n  bumpversion finalize --allow-dirty\n",
         ));
 
     assert_eq!(fs::read_to_string(temp.path().join("VERSION"))?, "1.3.0\n");
@@ -592,6 +625,162 @@ fn test_pre_commit_failure_has_recovery_guidance() -> eyre::Result<()> {
         .output()?;
     eyre::ensure!(tags.status.success(), "failed to inspect tags");
     assert_eq!(String::from_utf8(tags.stdout)?.trim(), "v1.2.3");
+    Ok(())
+}
+
+/// A failed `git add` left the bump half done with only a backtrace to show for
+/// it.
+/// It is the same situation as a failed pre-commit hook, and gets the same way
+/// out.
+#[test]
+fn test_stage_failure_has_recovery_guidance() -> eyre::Result<()> {
+    let temp = repo_with(
+        ".bumpversion.toml",
+        indoc! {r#"
+            [tool.bumpversion]
+            current_version = "1.2.3"
+            commit = true
+            tag = true
+            additional_files = ["missing.lock"]
+
+            [[tool.bumpversion.files]]
+            filename = "VERSION"
+        "#},
+    )?;
+    fs::write(temp.path().join("VERSION"), "1.2.3\n")?;
+    git_commit_all(temp.path())?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path()).args(["bump", "minor"]);
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "error: failed to stage the release files with exit code 128\n  cd ",
+        ))
+        .stderr(predicate::str::contains("git add --update"))
+        .stderr(predicate::str::contains(
+            "stderr:\n  fatal: pathspec",
+        ))
+        .stderr(predicate::str::contains("did not match any files"))
+        .stderr(predicate::str::contains("Backtrace omitted").not())
+        .stderr(predicate::str::ends_with(
+            "Either revert them and start over, or fix the issue and run:\n\n  bumpversion finalize --allow-dirty\n",
+        ));
+
+    assert_eq!(fs::read_to_string(temp.path().join("VERSION"))?, "1.3.0\n");
+    let tags = std::process::Command::new("git")
+        .args(["tag", "-l"])
+        .current_dir(temp.path())
+        .output()?;
+    eyre::ensure!(tags.status.success(), "failed to inspect tags");
+    assert!(
+        tags.stdout.is_empty(),
+        "no tag may exist after a failed stage, found: {}",
+        String::from_utf8_lossy(&tags.stdout)
+    );
+    Ok(())
+}
+
+/// `git add 'docs/examples/*/generated'` matches nothing: git does not descend
+/// into a directory a wildcard names.
+/// The pattern has to be expanded to the directories before git sees it.
+#[test]
+fn test_additional_files_glob_stages_directories() -> eyre::Result<()> {
+    let temp = repo_with(
+        ".bumpversion.toml",
+        indoc! {r#"
+            [tool.bumpversion]
+            current_version = "1.0.0"
+            commit = true
+            tag = false
+            pre_commit_hooks = ['for dir in docs/examples/*/generated; do printf "version=%s\n" "$BVHOOK_NEW_VERSION" > "$dir/out.txt"; done']
+            additional_files = ["docs/examples/*/generated"]
+
+            [[tool.bumpversion.files]]
+            filename = "VERSION"
+        "#},
+    )?;
+    fs::write(temp.path().join("VERSION"), "1.0.0")?;
+    for example in ["alpha", "beta"] {
+        let generated = temp
+            .path()
+            .join("docs/examples")
+            .join(example)
+            .join("generated");
+        fs::create_dir_all(&generated)?;
+        fs::write(generated.join("out.txt"), "version=1.0.0\n")?;
+    }
+    git_commit_all(temp.path())?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path()).args(["bump", "minor"]);
+    cmd.assert().success();
+
+    for example in ["alpha", "beta"] {
+        let committed = std::process::Command::new("git")
+            .args([
+                "show",
+                &format!("HEAD:docs/examples/{example}/generated/out.txt"),
+            ])
+            .current_dir(temp.path())
+            .output()?;
+        eyre::ensure!(
+            committed.status.success(),
+            "failed to read committed file for {example}: {}",
+            String::from_utf8_lossy(&committed.stderr)
+        );
+        assert_eq!(String::from_utf8(committed.stdout)?, "version=1.1.0\n");
+    }
+    let status = std::process::Command::new("git")
+        .args(["status", "--short"])
+        .current_dir(temp.path())
+        .output()?;
+    eyre::ensure!(status.status.success(), "failed to inspect git status");
+    assert!(
+        status.stdout.is_empty(),
+        "generated files must be in the bump commit: {}",
+        String::from_utf8_lossy(&status.stdout)
+    );
+    Ok(())
+}
+
+/// A dirty working tree is an everyday situation, not a crash.
+/// It gets the files by their repository paths and the flag that proceeds
+/// anyway, not a backtrace.
+#[test]
+fn test_dirty_working_directory_is_reported_cleanly() -> eyre::Result<()> {
+    let temp = armed_repo()?;
+    fs::write(temp.path().join("notes.txt"), "draft\n")?;
+    git_commit_all(temp.path())?;
+    fs::write(temp.path().join("notes.txt"), "edited draft\n")?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path()).args(["bump", "patch"]);
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "error: working directory is not clean\n\n  notes.txt\n",
+        ))
+        .stderr(predicate::str::contains("--allow-dirty"))
+        .stderr(predicate::str::contains("Backtrace omitted").not())
+        .stderr(predicate::str::contains("Location:").not());
+    assert_untouched(temp.path())?;
+    Ok(())
+}
+
+/// An error without a command behind it shows what failed and why, one cause per
+/// line.
+#[test]
+fn test_unknown_component_shows_the_cause() -> eyre::Result<()> {
+    let temp = armed_repo()?;
+    git_commit_all(temp.path())?;
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_bumpversion"));
+    cmd.current_dir(temp.path()).args(["bump", "flavor"]);
+    cmd.assert().failure().stderr(predicate::str::ends_with(
+        "error: failed to bump version\n\nCaused by:\n  invalid version component \"flavor\"\n",
+    ));
+    assert_untouched(temp.path())?;
     Ok(())
 }
 

@@ -30,8 +30,9 @@ The check is skipped for the read-only commands, [`show` and `show-bump`]({{< re
 
 ## Finishing an interrupted bump
 
-If a pre-commit hook fails, the version replacements remain in the working tree, while the commit
-and tag are not created.
+If a pre-commit hook fails, or git cannot stage or commit the release files, the version
+replacements remain in the working tree, while the commit and tag are not created.
+The error names the command that failed, shows its output, and ends with the way out.
 Fix the failed check, then resume the release without replacing versions again:
 
 ```bash

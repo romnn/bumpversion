@@ -35,6 +35,10 @@ workspace = true
 
 [dependencies]
 color-eyre.workspace = true
+thiserror.workspace = true
+
+# The CLI error enum names this crate's error type, which the library returns from `--parse`.
+regex = "^1.11"
 
 # cli
 clap = { version = "4", features = ["derive", "env", "color"] }

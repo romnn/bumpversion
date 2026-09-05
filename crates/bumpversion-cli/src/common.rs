@@ -1,58 +1,20 @@
 //! Common logic for the bumpversion CLI and subcommands.
 //!
 //! Sets up logging, loads configuration, and orchestrates the bump process.
+use crate::error::Error;
 use crate::options;
 use bumpversion::{
-    BumpError,
-    command::Error as CommandError,
-    config, hooks,
+    config,
     vcs::{TagAndRevision, VersionControlSystem, git::GitRepository},
 };
-use color_eyre::eyre::{self, WrapErr};
 use std::process::ExitCode;
 
-fn render_pre_commit_failure(error: &hooks::Error) -> String {
-    let mut sections = match error {
-        hooks::Error::Command(CommandError::Failed { command, output }) => {
-            let exit_code = output
-                .status
-                .code()
-                .map_or_else(|| "unknown".to_string(), |code| code.to_string());
-            let mut sections = vec![
-                format!("Pre-commit hook failed with exit code {exit_code}:"),
-                format!("  {command}"),
-            ];
-            if !output.stdout.is_empty() {
-                sections.push(format!("Stdout:\n{}", output.stdout.trim_end()));
-            }
-            if !output.stderr.is_empty() {
-                sections.push(format!("Stderr:\n{}", output.stderr.trim_end()));
-            }
-            sections
-        }
-        _ => vec![format!("Pre-commit hook failed:\n  {error}")],
-    };
-
-    sections.push("The version changes are still in your working tree.".to_string());
-    sections.push(
-        "Either revert them and start over, or fix the issue and run:\n  bumpversion finalize --allow-dirty"
-            .to_string(),
-    );
-    sections.join("\n\n")
-}
-
 /// Prints a CLI result and returns the corresponding process exit code.
-pub(crate) fn report_result(result: eyre::Result<()>) -> ExitCode {
+pub(crate) fn report_result(result: Result<(), Error>) -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            if let Some(BumpError::PreCommitHook(source)) =
-                error.downcast_ref::<BumpError<GitRepository>>()
-            {
-                eprintln!("{}", render_pre_commit_failure(source));
-            } else {
-                eprintln!("{error:?}");
-            }
+            eprint!("{}", crate::error::render(&error));
             ExitCode::FAILURE
         }
     }
@@ -61,21 +23,19 @@ pub(crate) fn report_result(result: eyre::Result<()>) -> ExitCode {
 /// Ensure the working directory is clean, unless `allow_dirty` is set.
 ///
 /// # Errors
-/// Returns an error if the repo is dirty and not allowed by config.
+/// Returns [`Error::Dirty`] if the repository has uncommitted changes the config does not allow.
 async fn check_is_dirty(
     repo: &GitRepository,
     config: &config::FinalizedConfig,
-) -> eyre::Result<()> {
+) -> Result<(), Error> {
     let dirty_files = repo.dirty_files().await?;
     if !config.global.allow_dirty && !dirty_files.is_empty() {
-        eyre::bail!(
-            "Working directory is not clean:\n\n{}",
-            dirty_files
-                .iter()
-                .map(|file| file.to_string_lossy())
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
+        // Relative to the repository: the common prefix tells the user nothing.
+        let files = dirty_files
+            .iter()
+            .map(|file| file.strip_prefix(repo.path()).unwrap_or(file).to_path_buf())
+            .collect();
+        return Err(Error::Dirty { files });
     }
 
     Ok(())
@@ -84,15 +44,23 @@ async fn check_is_dirty(
 /// Entry point for the `bumpversion` CLI.
 ///
 /// Processes command-line `options`, loads the project config, and performs the bump.
-pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
+///
+/// # Errors
+///
+/// Returns the [`Error`] that [`report_result`] renders for the user.
+pub async fn bumpversion(mut options: options::Options) -> Result<(), Error> {
     let start = std::time::Instant::now();
 
     let color_choice = options.color_choice.unwrap_or(termcolor::ColorChoice::Auto);
     let use_color = crate::logging::setup(options.log_level, color_choice)?;
     colored::control::set_override(use_color);
 
-    let cwd = std::env::current_dir().wrap_err("could not determine current working dir")?;
-    let dir = options.dir.as_deref().unwrap_or(&cwd).canonicalize()?;
+    let cwd = std::env::current_dir().map_err(Error::CurrentDir)?;
+    let dir = options.dir.as_deref().unwrap_or(&cwd);
+    let dir = dir.canonicalize().map_err(|source| Error::ResolveDir {
+        path: dir.to_path_buf(),
+        source,
+    })?;
     let repo = GitRepository::open(&dir)?;
 
     let printer = bumpversion::diagnostics::Printer::stderr(color_choice.into());
@@ -102,18 +70,21 @@ pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
     // directory, not `--dir`, so `--dir sub --config-file my.toml` behaves the way
     // a shell path does.
     let config_file = options.config_file.as_deref();
-    if let Some(path) = config_file {
-        eyre::ensure!(path.is_file(), "config file {path:?} does not exist");
+    if let Some(path) = config_file
+        && !path.is_file()
+    {
+        return Err(Error::ConfigFileNotFound {
+            path: path.to_path_buf(),
+        });
     }
     let (config_file_path, mut config) =
         bumpversion::find_config(&dir, config_file, &cli_overrides, &printer)
             .await?
-            .ok_or_else(|| {
-                if let Some(path) = config_file {
-                    eyre::eyre!("no bumpversion configuration found in {path:?}")
-                } else {
-                    eyre::eyre!("missing config file")
-                }
+            .ok_or_else(|| match config_file {
+                Some(path) => Error::ConfigFileEmpty {
+                    path: path.to_path_buf(),
+                },
+                None => Error::ConfigNotFound { dir: dir.clone() },
             })?;
 
     let components = config::version::version_component_configs(&config);
@@ -192,9 +163,7 @@ pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
     let bump = if let Some(new_version) = options.new_version.as_deref() {
         bumpversion::Bump::NewVersion(new_version)
     } else {
-        let bump = bump
-            .as_deref()
-            .ok_or_else(|| eyre::eyre!("missing version component to bump"))?;
+        let bump = bump.as_deref().ok_or(Error::MissingComponent)?;
         bumpversion::Bump::Component(bump)
     };
 
@@ -207,7 +176,7 @@ pub async fn bumpversion(mut options: options::Options) -> eyre::Result<()> {
 async fn handle_subcommand<L>(
     command: options::SubCommand,
     manager: &bumpversion::BumpVersion<GitRepository, L>,
-) -> eyre::Result<bool>
+) -> Result<bool, Error>
 where
     L: bumpversion::logging::Log,
 {
@@ -231,7 +200,7 @@ where
 fn handle_show<VCS, L>(
     options: &options::ShowOptions,
     manager: &bumpversion::BumpVersion<VCS, L>,
-) -> eyre::Result<()>
+) -> Result<(), Error>
 where
     VCS: VersionControlSystem,
     L: bumpversion::logging::Log,
@@ -241,7 +210,7 @@ where
         .global
         .current_version
         .as_ref()
-        .ok_or_else(|| eyre::eyre!("missing current version"))?;
+        .ok_or(Error::MissingCurrentVersion)?;
 
     let parse_version_pattern = &manager.config.global.parse_version_pattern;
     let version_spec =
@@ -299,7 +268,7 @@ where
 fn handle_show_bump<VCS, L>(
     options: &options::ShowBumpOptions,
     manager: &bumpversion::BumpVersion<VCS, L>,
-) -> eyre::Result<()>
+) -> Result<(), Error>
 where
     VCS: VersionControlSystem,
     L: bumpversion::logging::Log,
@@ -308,14 +277,14 @@ where
         .component
         .as_deref()
         .or(options.args.first().map(std::string::String::as_str))
-        .ok_or_else(|| eyre::eyre!("missing version component to bump"))?;
+        .ok_or(Error::MissingComponent)?;
 
     let current_version_serialized = manager
         .config
         .global
         .current_version
         .as_ref()
-        .ok_or_else(|| eyre::eyre!("missing current version"))?;
+        .ok_or(Error::MissingCurrentVersion)?;
 
     let parse_version_pattern = &manager.config.global.parse_version_pattern;
     let version_spec =
@@ -325,7 +294,9 @@ where
         parse_version_pattern,
         &version_spec,
     )
-    .ok_or_else(|| eyre::eyre!("failed to parse current version"))?;
+    .ok_or_else(|| Error::InvalidCurrentVersion {
+        version: current_version_serialized.clone(),
+    })?;
 
     let new_version = current_version.bump(component)?;
     let serialize_version_patterns = &manager.config.global.serialize_version_patterns;

@@ -2,7 +2,6 @@
 //!
 //! Defines flags, positional arguments, and configuration overrides via environment.
 use bumpversion::config;
-use color_eyre::eyre;
 use std::path::PathBuf;
 
 /// Trait to invert an `Option<bool>`, used for negatable flags (e.g., --flag/--no-flag).
@@ -396,10 +395,44 @@ pub fn fix(options: &mut Options) {
     }
 }
 
+/// Errors in the command-line arguments that clap cannot check itself.
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    /// A positional argument looks like a flag this CLI does not know.
+    #[error("unknown flag {0:?}")]
+    UnknownFlag(String),
+    /// The first positional argument is not a configured version component.
+    #[error("{component:?} is not a version component; expected one of {components:?}")]
+    UnknownComponent {
+        /// The argument that was given.
+        component: String,
+        /// The components the configuration defines.
+        components: Vec<String>,
+    },
+    /// A template option is not a valid format string.
+    #[error("invalid value for --{option}")]
+    FormatString {
+        /// The option that was given, without its leading dashes.
+        option: &'static str,
+        /// Underlying parse error.
+        #[source]
+        source: bumpversion::f_string::ParseError,
+    },
+    /// `--parse` is not a valid regular expression.
+    #[error("invalid value for --parse")]
+    ParsePattern(#[source] regex::Error),
+}
+
+/// Split the positional arguments into the component to bump and the files to include.
+///
+/// # Errors
+///
+/// Returns [`Error::UnknownFlag`] for a positional argument that looks like a flag, and
+/// [`Error::UnknownComponent`] if the first argument is not a configured version component.
 pub fn parse_positional_arguments(
     options: &mut Options,
     components: &config::VersionComponentConfigs,
-) -> eyre::Result<(Option<String>, Vec<PathBuf>)> {
+) -> Result<(Option<String>, Vec<PathBuf>), Error> {
     let mut cli_files = vec![];
     let mut bump: Option<String> = None;
 
@@ -422,7 +455,7 @@ pub fn parse_positional_arguments(
         // first, check for invalid flags in the args
         for arg in &options.args {
             if arg.starts_with("--") {
-                eyre::bail!("unknown flag {arg:?}");
+                return Err(Error::UnknownFlag(arg.clone()));
             }
         }
 
@@ -434,30 +467,41 @@ pub fn parse_positional_arguments(
             // remaining arguments are files
             cli_files.extend(options.args.drain(..).map(PathBuf::from));
         } else {
-            eyre::bail!(
-                "first argument must be one of the version components {:?}",
-                components.keys().collect::<Vec<_>>()
-            )
+            return Err(Error::UnknownComponent {
+                component,
+                components: components.keys().cloned().collect(),
+            });
         }
     }
 
     Ok((bump, cli_files))
 }
 
-pub fn global_cli_config(options: &Options) -> eyre::Result<bumpversion::config::GlobalConfig> {
+/// Build the global configuration overrides from the command-line options.
+///
+/// # Errors
+///
+/// Returns [`Error::FormatString`] for a template option that does not parse and
+/// [`Error::ParsePattern`] for an invalid `--parse` pattern.
+pub fn global_cli_config(options: &Options) -> Result<bumpversion::config::GlobalConfig, Error> {
+    let format_string = |option: &'static str, value: &str| {
+        bumpversion::f_string::PythonFormatString::parse(value)
+            .map_err(|source| Error::FormatString { option, source })
+    };
+
     let search_as_regex = options.regex.or(options.no_regex.invert()).unwrap_or(false);
 
     let search = options
         .search
-        .as_ref()
+        .as_deref()
         .map(|search| {
-            let format_string = bumpversion::f_string::PythonFormatString::parse(search)?;
+            let format_string = format_string("search", search)?;
             let search = if search_as_regex {
                 bumpversion::config::RegexTemplate::Regex(format_string)
             } else {
                 bumpversion::config::RegexTemplate::Escaped(format_string)
             };
-            Ok::<_, eyre::Report>(search)
+            Ok::<_, Error>(search)
         })
         .transpose()?;
 
@@ -465,7 +509,8 @@ pub fn global_cli_config(options: &Options) -> eyre::Result<bumpversion::config:
         .parse_version_pattern
         .as_deref()
         .map(bumpversion::config::Regex::try_from)
-        .transpose()?;
+        .transpose()
+        .map_err(Error::ParsePattern)?;
 
     let serialize_version_patterns = options
         .serialize_version_patterns
@@ -473,8 +518,7 @@ pub fn global_cli_config(options: &Options) -> eyre::Result<bumpversion::config:
         .map(|patterns| {
             patterns
                 .iter()
-                .map(String::as_str)
-                .map(bumpversion::f_string::PythonFormatString::parse)
+                .map(|pattern| format_string("serialize", pattern))
                 .collect::<Result<Vec<_>, _>>()
         })
         .transpose()?;
@@ -482,19 +526,19 @@ pub fn global_cli_config(options: &Options) -> eyre::Result<bumpversion::config:
     let tag_name = options
         .tag_name
         .as_deref()
-        .map(bumpversion::f_string::PythonFormatString::parse)
+        .map(|value| format_string("tag-name", value))
         .transpose()?;
 
     let tag_message = options
         .tag_message
         .as_deref()
-        .map(bumpversion::f_string::PythonFormatString::parse)
+        .map(|value| format_string("tag-message", value))
         .transpose()?;
 
     let commit_message = options
         .commit_message
         .as_deref()
-        .map(bumpversion::f_string::PythonFormatString::parse)
+        .map(|value| format_string("message", value))
         .transpose()?;
 
     let cli_overrides = bumpversion::config::GlobalConfig {

@@ -3,23 +3,24 @@
 #![forbid(unsafe_code)]
 
 mod common;
+mod error;
 mod logging;
 mod options;
 mod verbose;
 
 use clap::Parser;
-use color_eyre::eyre;
 use std::process::ExitCode;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let result: eyre::Result<()> = async {
-        color_eyre::install()?;
-
-        let mut options = options::Options::parse();
-        options::fix(&mut options);
-        common::bumpversion(options).await
+    // Every expected failure is a typed error that `report_result` renders; the
+    // eyre handler is installed for panics alone.
+    if let Err(error) = color_eyre::install() {
+        eprintln!("error: could not install the panic handler: {error}");
+        return ExitCode::FAILURE;
     }
-    .await;
-    common::report_result(result)
+
+    let mut options = options::Options::parse();
+    options::fix(&mut options);
+    common::report_result(common::bumpversion(options).await)
 }
