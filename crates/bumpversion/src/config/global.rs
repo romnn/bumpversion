@@ -56,6 +56,7 @@ pub struct GlobalConfig {
     ///
     /// This is useful for files such as lockfiles, which should be regenerated after the version
     /// bump in a pre-commit hook.
+    /// An entry may be a glob pattern, and a matched directory is staged recursively.
     pub additional_files: Option<Vec<PathBuf>>,
 }
 
@@ -114,6 +115,7 @@ pub struct GlobalConfigFinalized {
     ///
     /// This is useful for files such as lockfiles, which should be regenerated after the version
     /// bump in a pre-commit hook.
+    /// An entry may be a glob pattern, and a matched directory is staged recursively.
     pub additional_files: Option<Vec<PathBuf>>,
 }
 

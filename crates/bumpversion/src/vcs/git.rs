@@ -13,24 +13,24 @@ use std::sync::LazyLock;
 /// Git VCS error type.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    /// I/O error while running git commands.
-    #[error("io error: {0}")]
+    /// The commit message could not be written to the temporary file git reads it from.
+    #[error("could not write the commit message to a temporary file")]
     Io(#[from] std::io::Error),
 
-    /// UTF-8 decoding error.
-    #[error("UTF-8 decode error: {0}")]
+    /// Git printed output that is not valid UTF-8.
+    #[error("git output is not valid UTF-8")]
     Utf8(#[from] std::str::Utf8Error),
 
-    /// Git command execution failed.
-    #[error("command failed: {0}")]
+    /// A git command could not be run or exited with an error.
+    #[error(transparent)]
     CommandFailed(#[from] crate::command::Error),
 
-    /// Regex compilation error.
-    #[error("regex error: {0}")]
+    /// The pattern that extracts the version from a tag could not be compiled.
+    #[error("could not build the tag version pattern")]
     Regex(#[from] regex::Error),
 
     /// Failed to parse tag output.
-    #[error("invalid tag: {0}")]
+    #[error(transparent)]
     InvalidTag(#[from] InvalidTagError),
 
     /// Missing argument while formatting a template.

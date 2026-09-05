@@ -318,22 +318,83 @@ pub enum Error {
     Io(#[from] IoError),
 }
 
+/// Match options shared by every glob pattern bumpversion expands.
+const GLOB_OPTIONS: glob::MatchOptions = glob::MatchOptions {
+    case_sensitive: false,
+    require_literal_separator: false,
+    require_literal_leading_dot: false,
+};
+
+/// Whether `path` contains a character that [`glob`] interprets.
+fn is_glob_pattern(path: &Path) -> bool {
+    path.to_string_lossy().contains(['*', '?', '['])
+}
+
+/// Resolve the `additional_files` entries to the paths staged with the release commit.
+///
+/// An entry with glob characters is expanded relative to `base_dir`.
+/// A match may be a directory, which the VCS stages recursively, so `docs/*/generated` covers
+/// every tracked file below each `generated` directory.
+/// A pattern that matches nothing is skipped with a warning.
+///
+/// A plain path is returned as it is, joined to `base_dir` when relative, so the VCS reports a
+/// file that does not exist.
+///
+/// # Errors
+///
+/// Returns [`GlobError`] if a pattern is invalid or a matched directory cannot be read.
+pub fn resolve_additional_files(
+    entries: &[PathBuf],
+    base_dir: &Path,
+) -> Result<Vec<PathBuf>, GlobError> {
+    let mut resolved = Vec::new();
+    for entry in entries {
+        if !is_glob_pattern(entry) {
+            resolved.push(if entry.is_absolute() {
+                entry.clone()
+            } else {
+                base_dir.join(entry)
+            });
+            continue;
+        }
+        let pattern = if entry.is_absolute() {
+            entry.to_string_lossy().into_owned()
+        } else {
+            // The base directory is a literal path, so a `*`, `?`, or `[` in it must
+            // not be interpreted as part of the pattern.
+            format!(
+                "{}/{}",
+                glob::Pattern::escape(&base_dir.to_string_lossy()),
+                entry.to_string_lossy()
+            )
+        };
+        let mut matches: Vec<PathBuf> =
+            glob::glob_with(&pattern, GLOB_OPTIONS)?.collect::<Result<_, _>>()?;
+        if matches.is_empty() {
+            tracing::warn!(
+                "additional_files pattern {} did not match any files",
+                entry.display()
+            );
+        }
+        // Sorted: `glob` yields matches in an unspecified order, and the staged
+        // files are logged in the order they are resolved.
+        matches.sort();
+        resolved.extend(matches);
+    }
+    Ok(resolved)
+}
+
 /// Return a list of file configurations that match the glob pattern
 fn resolve_glob_files(
     pattern: &str,
     exclude_patterns: &[String],
 ) -> Result<Vec<PathBuf>, GlobError> {
-    let options = glob::MatchOptions {
-        case_sensitive: false,
-        require_literal_separator: false,
-        require_literal_leading_dot: false,
-    };
     let included: HashSet<PathBuf> =
-        glob::glob_with(pattern, options)?.collect::<Result<_, _>>()?;
+        glob::glob_with(pattern, GLOB_OPTIONS)?.collect::<Result<_, _>>()?;
 
     let excluded: HashSet<PathBuf> = exclude_patterns
         .iter()
-        .map(|pattern| glob::glob_with(pattern, options))
+        .map(|pattern| glob::glob_with(pattern, GLOB_OPTIONS))
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
         .flat_map(std::iter::IntoIterator::into_iter)
@@ -441,4 +502,86 @@ pub fn files_to_modify(
     file_map
         .into_iter()
         .filter(move |(file, _)| included_files.contains(file))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_additional_files;
+    use color_eyre::eyre;
+    use similar_asserts::assert_eq as sim_assert_eq;
+    use std::fs;
+    use std::path::PathBuf;
+
+    /// A repository with two generated directories and a lockfile.
+    fn repo() -> eyre::Result<tempfile::TempDir> {
+        let temp = tempfile::tempdir()?;
+        for example in ["a", "b"] {
+            let generated = temp
+                .path()
+                .join("docs/examples")
+                .join(example)
+                .join("generated");
+            fs::create_dir_all(&generated)?;
+            fs::write(generated.join("out.txt"), "generated")?;
+        }
+        fs::write(temp.path().join("Cargo.lock"), "lock")?;
+        Ok(temp)
+    }
+
+    /// `git add` does not descend into a directory matched by a wildcard, so the
+    /// pattern must be expanded to the directories themselves.
+    #[test]
+    fn glob_expands_to_matched_directories() -> eyre::Result<()> {
+        crate::tests::init();
+        let temp = repo()?;
+        let entries = [PathBuf::from("docs/examples/*/generated")];
+        let resolved = resolve_additional_files(&entries, temp.path())?;
+        sim_assert_eq!(
+            resolved,
+            vec![
+                temp.path().join("docs/examples/a/generated"),
+                temp.path().join("docs/examples/b/generated"),
+            ]
+        );
+        Ok(())
+    }
+
+    /// A plain path is not looked up, so a missing lockfile still reaches the
+    /// VCS, which reports it.
+    #[test]
+    fn plain_paths_pass_through() -> eyre::Result<()> {
+        crate::tests::init();
+        let temp = repo()?;
+        let entries = [PathBuf::from("Cargo.lock"), PathBuf::from("missing.lock")];
+        let resolved = resolve_additional_files(&entries, temp.path())?;
+        sim_assert_eq!(
+            resolved,
+            vec![
+                temp.path().join("Cargo.lock"),
+                temp.path().join("missing.lock"),
+            ]
+        );
+        Ok(())
+    }
+
+    /// A pattern without matches contributes nothing rather than an invalid
+    /// pathspec.
+    #[test]
+    fn unmatched_glob_is_skipped() -> eyre::Result<()> {
+        crate::tests::init();
+        let temp = repo()?;
+        let entries = [PathBuf::from("nothing/*/here"), PathBuf::from("Cargo.lock")];
+        let resolved = resolve_additional_files(&entries, temp.path())?;
+        sim_assert_eq!(resolved, vec![temp.path().join("Cargo.lock")]);
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_glob_is_an_error() -> eyre::Result<()> {
+        crate::tests::init();
+        let temp = repo()?;
+        let entries = [PathBuf::from("docs/[unclosed")];
+        assert!(resolve_additional_files(&entries, temp.path()).is_err());
+        Ok(())
+    }
 }

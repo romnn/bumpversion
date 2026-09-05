@@ -270,9 +270,24 @@ where
     /// A required template argument was missing.
     #[error(transparent)]
     MissingArgument(#[from] f_string::MissingArgumentError),
-    /// Underlying version control system error.
-    #[error(transparent)]
-    VCS(VCS::Error),
+    /// An `additional_files` entry could not be resolved.
+    #[error("failed to resolve additional_files")]
+    AdditionalFiles(#[source] crate::files::GlobError),
+    /// Staging the release files failed.
+    ///
+    /// The version changes are still in the working tree.
+    #[error("failed to stage the release files")]
+    Add(#[source] VCS::Error),
+    /// Creating the release commit failed.
+    ///
+    /// The version changes are still in the working tree.
+    #[error("failed to create the release commit")]
+    Commit(#[source] VCS::Error),
+    /// Creating the release tag failed.
+    ///
+    /// The release commit already exists.
+    #[error("failed to create the release tag")]
+    Tag(#[source] VCS::Error),
 }
 
 /// Manager for performing version bumps in a repository.
@@ -354,21 +369,15 @@ where
         files::files_to_modify(&self.config, self.file_map.clone()).collect()
     }
 
-    fn additional_files(&self) -> Vec<PathBuf> {
-        self.config
+    fn additional_files(&self) -> Result<Vec<PathBuf>, BumpError<VCS>> {
+        let entries = self
+            .config
             .global
             .additional_files
             .as_deref()
-            .unwrap_or_default()
-            .iter()
-            .map(|path| {
-                if path.is_absolute() {
-                    path.clone()
-                } else {
-                    self.repo.path().join(path)
-                }
-            })
-            .collect()
+            .unwrap_or_default();
+        files::resolve_additional_files(entries, self.repo.path())
+            .map_err(BumpError::AdditionalFiles)
     }
 
     fn new_version_tag(
@@ -460,7 +469,7 @@ where
         .await
         .map_err(BumpError::PreCommitHook)?;
 
-        let additional_files = self.additional_files();
+        let additional_files = self.additional_files()?;
 
         // TODO: warn for files that dirty but not in either configured or additional files
         self.commit_changes(
@@ -651,7 +660,7 @@ where
         .map_err(BumpError::PreCommitHook)?;
 
         let configured_files = self.configured_files();
-        let additional_files = self.additional_files();
+        let additional_files = self.additional_files()?;
         self.commit_changes(
             &configured_files,
             &additional_files,
@@ -756,8 +765,9 @@ where
     /// * `ctx` - Context map used to format commit and tag templates.
     ///
     /// # Errors
-    /// Returns a [`BumpError<VCS>`] if staging, committing, or tagging fails,
-    /// or if message/tag formatting encounters an error.
+    /// Returns [`BumpError::Add`], [`BumpError::Commit`], or [`BumpError::Tag`] for the VCS step
+    /// that failed, so a caller can tell whether the changes are still uncommitted, or an error if
+    /// message/tag formatting fails.
     pub async fn commit_changes(
         &self,
         configured_files: &IndexMap<PathBuf, Vec<config::change::FileChange>>,
@@ -802,7 +812,7 @@ where
                 self.repo
                     .add(&files_to_commit)
                     .await
-                    .map_err(BumpError::VCS)?;
+                    .map_err(BumpError::Add)?;
             }
 
             let commit_message = self.config.global.commit_message.format(ctx, true)?;
@@ -831,7 +841,7 @@ where
                 self.repo
                     .commit(commit_message.as_str(), extra_args.as_slice(), env)
                     .await
-                    .map_err(BumpError::VCS)?;
+                    .map_err(BumpError::Commit)?;
             }
         }
 
@@ -842,7 +852,7 @@ where
 
             tracing::info!(msg = tag_message, name = tag_name, "tag");
 
-            let existing_tags = self.repo.tags().await.map_err(BumpError::VCS)?;
+            let existing_tags = self.repo.tags().await.map_err(BumpError::Tag)?;
 
             self.logger
                 .log(Verbosity::Low, &format!("{}", "[tag]".magenta()));
@@ -873,7 +883,7 @@ where
                     self.repo
                         .tag(tag_name.as_str(), Some(&tag_message), sign_tag)
                         .await
-                        .map_err(BumpError::VCS)?;
+                        .map_err(BumpError::Tag)?;
                 }
             }
         }

@@ -36,9 +36,10 @@ These live in `[tool.bumpversion]` (TOML) or `[bumpversion]` (INI).
 | --- | --- | --- |
 | `included_paths` | list of paths | — |
 | `excluded_paths` | list of paths | — |
-| `additional_files` | list of paths | — |
+| `additional_files` | list of paths or glob patterns | — |
 
 `included_paths` is a union, not a filter: it can add a path that no `[[files]]` entry produced.
+An `additional_files` glob may match directories, which are staged recursively.
 
 ### Version control
 

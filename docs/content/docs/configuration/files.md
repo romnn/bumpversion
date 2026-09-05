@@ -102,6 +102,14 @@ Per-file, `ignore_missing_file` (singular) is accepted as well.
 additional_files = ["Cargo.lock", "CHANGELOG.md"]
 ```
 
+An entry may be a glob pattern, and a match may be a directory, which is staged with everything tracked below it. This stages every `generated` directory under `docs/examples`, however many examples there are:
+
+```toml
+additional_files = ["Cargo.lock", "docs/examples/*/generated"]
+```
+
+Patterns are resolved against the repository root before git sees them, so `docs/examples/*/generated` reaches the files inside each directory. A pattern that matches nothing is skipped with a warning. A plain path with no wildcard is handed to git as is, and git reports it if the file does not exist.
+
 Without this, a hook's changes would be left uncommitted in the working tree after the release commit. For a Rust project, [Cargo.lock in the release commit]({{< relref "hooks.md" >}}#rust-keeping-cargolock-in-the-release-commit) shows the whole pattern — the hook that refreshes the lockfile and the entry that stages it.
 
 ## Restricting the run

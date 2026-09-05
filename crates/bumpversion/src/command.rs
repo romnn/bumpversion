@@ -27,15 +27,19 @@ impl From<async_process::Output> for Output {
     }
 }
 
-/// Errors that can occur when running an external process.
 /// Errors that can occur when running external commands.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    /// I/O error while spawning or capturing the process.
-    #[error("io error: {0}")]
-    Io(#[from] std::io::Error),
+    /// The process could not be spawned or its output could not be captured.
+    #[error("could not run `{command}`")]
+    Io {
+        /// The command that was run, rendered without its environment.
+        command: String,
+        /// Underlying I/O error.
+        #[source]
+        source: std::io::Error,
+    },
 
-    // TODO: into eyre here!
     /// The process exited with a non-zero status code.
     #[error(
         "`{}` failed with code {}:\n\n--- Stdout:\n {}\n--- Stderr:\n {}",
@@ -94,16 +98,15 @@ pub fn check_exit_status(cmd: &Command, output: &async_process::Output) -> Resul
     }
 }
 
-/// Execute the given command, capturing output and checking exit status.
-///
-/// # Errors
-/// Returns `Error::Io` for I/O errors or `Error::Failed` if the process exits with non-zero status.
 /// Execute the given command, capturing stdout/stderr and checking exit code.
 ///
 /// # Errors
 /// Returns `Error::Io` for I/O failures or `Error::Failed` for non-zero exits.
 pub async fn run_command(cmd: &mut Command) -> Result<Output, Error> {
-    let output = cmd.output().await?;
+    let output = cmd.output().await.map_err(|source| Error::Io {
+        command: display_command(cmd),
+        source,
+    })?;
     check_exit_status(cmd, &output)?;
     Ok(output.into())
 }
