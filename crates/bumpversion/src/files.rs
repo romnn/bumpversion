@@ -8,7 +8,7 @@ use crate::{
 };
 use indexmap::IndexMap;
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 // /// Does the search pattern match any part of the contents?
 // fn contains_pattern(contents: &str, search_pattern: &regex::Regex) -> bool {
@@ -325,9 +325,43 @@ const GLOB_OPTIONS: glob::MatchOptions = glob::MatchOptions {
     require_literal_leading_dot: false,
 };
 
+/// Whether `component` is the prefix or root of a path rather than a directory or file name.
+fn is_path_root(component: Component<'_>) -> bool {
+    matches!(component, Component::Prefix(_) | Component::RootDir)
+}
+
 /// Whether `path` contains a character that [`glob`] interprets.
+///
+/// The prefix and root are skipped: a canonical Windows path starts with the verbatim prefix
+/// `\\?\`, whose `?` is not a wildcard.
 fn is_glob_pattern(path: &Path) -> bool {
-    path.to_string_lossy().contains(['*', '?', '['])
+    path.components()
+        .filter(|component| !is_path_root(*component))
+        .any(|component| {
+            component
+                .as_os_str()
+                .to_string_lossy()
+                .contains(['*', '?', '['])
+        })
+}
+
+/// Render `base_dir` as the literal start of a glob pattern.
+///
+/// Every directory name is escaped so a `*`, `?`, or `[` in it matches itself.
+/// The prefix and root are kept as they are, because [`glob`] takes them as the directory to
+/// search from rather than as a pattern, and escaping the `?` of a Windows verbatim prefix
+/// `\\?\` turns a canonical path into one that matches nothing.
+fn literal_glob_prefix(base_dir: &Path) -> PathBuf {
+    let mut prefix = PathBuf::new();
+    for component in base_dir.components() {
+        match component {
+            Component::Normal(name) => {
+                prefix.push(glob::Pattern::escape(&name.to_string_lossy()));
+            }
+            _ => prefix.push(component.as_os_str()),
+        }
+    }
+    prefix
 }
 
 /// Resolve the `additional_files` entries to the paths staged with the release commit.
@@ -358,18 +392,12 @@ pub fn resolve_additional_files(
             continue;
         }
         let pattern = if entry.is_absolute() {
-            entry.to_string_lossy().into_owned()
+            entry.clone()
         } else {
-            // The base directory is a literal path, so a `*`, `?`, or `[` in it must
-            // not be interpreted as part of the pattern.
-            format!(
-                "{}/{}",
-                glob::Pattern::escape(&base_dir.to_string_lossy()),
-                entry.to_string_lossy()
-            )
+            literal_glob_prefix(base_dir).join(entry)
         };
         let mut matches: Vec<PathBuf> =
-            glob::glob_with(&pattern, GLOB_OPTIONS)?.collect::<Result<_, _>>()?;
+            glob::glob_with(&pattern.to_string_lossy(), GLOB_OPTIONS)?.collect::<Result<_, _>>()?;
         if matches.is_empty() {
             tracing::warn!(
                 "additional_files pattern {} did not match any files",
@@ -512,20 +540,21 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
-    /// A repository with two generated directories and a lockfile.
-    fn repo() -> eyre::Result<tempfile::TempDir> {
+    /// A repository with two generated directories and a lockfile, and its canonical root.
+    ///
+    /// The root is canonical because the CLI canonicalizes the repository path.
+    /// On Windows that adds the verbatim prefix `\\?\`, whose `?` must not be read as a
+    /// wildcard.
+    fn repo() -> eyre::Result<(tempfile::TempDir, PathBuf)> {
         let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
         for example in ["a", "b"] {
-            let generated = temp
-                .path()
-                .join("docs/examples")
-                .join(example)
-                .join("generated");
+            let generated = root.join("docs/examples").join(example).join("generated");
             fs::create_dir_all(&generated)?;
             fs::write(generated.join("out.txt"), "generated")?;
         }
-        fs::write(temp.path().join("Cargo.lock"), "lock")?;
-        Ok(temp)
+        fs::write(root.join("Cargo.lock"), "lock")?;
+        Ok((temp, root))
     }
 
     /// `git add` does not descend into a directory matched by a wildcard, so the
@@ -533,14 +562,14 @@ mod tests {
     #[test]
     fn glob_expands_to_matched_directories() -> eyre::Result<()> {
         crate::tests::init();
-        let temp = repo()?;
+        let (_temp, root) = repo()?;
         let entries = [PathBuf::from("docs/examples/*/generated")];
-        let resolved = resolve_additional_files(&entries, temp.path())?;
+        let resolved = resolve_additional_files(&entries, &root)?;
         sim_assert_eq!(
             resolved,
             vec![
-                temp.path().join("docs/examples/a/generated"),
-                temp.path().join("docs/examples/b/generated"),
+                root.join("docs/examples/a/generated"),
+                root.join("docs/examples/b/generated"),
             ]
         );
         Ok(())
@@ -551,15 +580,12 @@ mod tests {
     #[test]
     fn plain_paths_pass_through() -> eyre::Result<()> {
         crate::tests::init();
-        let temp = repo()?;
+        let (_temp, root) = repo()?;
         let entries = [PathBuf::from("Cargo.lock"), PathBuf::from("missing.lock")];
-        let resolved = resolve_additional_files(&entries, temp.path())?;
+        let resolved = resolve_additional_files(&entries, &root)?;
         sim_assert_eq!(
             resolved,
-            vec![
-                temp.path().join("Cargo.lock"),
-                temp.path().join("missing.lock"),
-            ]
+            vec![root.join("Cargo.lock"), root.join("missing.lock")]
         );
         Ok(())
     }
@@ -569,19 +595,32 @@ mod tests {
     #[test]
     fn unmatched_glob_is_skipped() -> eyre::Result<()> {
         crate::tests::init();
-        let temp = repo()?;
+        let (_temp, root) = repo()?;
         let entries = [PathBuf::from("nothing/*/here"), PathBuf::from("Cargo.lock")];
-        let resolved = resolve_additional_files(&entries, temp.path())?;
-        sim_assert_eq!(resolved, vec![temp.path().join("Cargo.lock")]);
+        let resolved = resolve_additional_files(&entries, &root)?;
+        sim_assert_eq!(resolved, vec![root.join("Cargo.lock")]);
         Ok(())
     }
 
     #[test]
     fn invalid_glob_is_an_error() -> eyre::Result<()> {
         crate::tests::init();
-        let temp = repo()?;
+        let (_temp, root) = repo()?;
         let entries = [PathBuf::from("docs/[unclosed")];
-        assert!(resolve_additional_files(&entries, temp.path()).is_err());
+        assert!(resolve_additional_files(&entries, &root).is_err());
         Ok(())
+    }
+
+    /// The `?` in the verbatim prefix of a canonical Windows path is not a wildcard,
+    /// so a plain absolute path stays a plain path.
+    #[cfg(windows)]
+    #[test]
+    fn verbatim_prefix_is_not_a_glob() {
+        assert!(!super::is_glob_pattern(std::path::Path::new(
+            r"\\?\C:\repo\Cargo.lock"
+        )));
+        assert!(super::is_glob_pattern(std::path::Path::new(
+            r"\\?\C:\repo\docs\*\generated"
+        )));
     }
 }
