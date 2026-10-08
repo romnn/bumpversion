@@ -39,7 +39,7 @@ These live in `[tool.bumpversion]` (TOML) or `[bumpversion]` (INI).
 | `additional_files` | list of paths or glob patterns | — |
 
 `included_paths` is a union, not a filter: it can add a path that no `[[files]]` entry produced.
-An `additional_files` glob may match directories, which are staged recursively.
+An `additional_files` glob may match directories, which are staged recursively. Entries are staged with `git add`, so new, renamed, and deleted files under a listed path are committed too, including stray untracked files under a listed directory.
 
 ### Version control
 

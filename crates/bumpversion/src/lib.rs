@@ -749,6 +749,22 @@ where
         }
     }
 
+    /// Stage the release files.
+    ///
+    /// `tracked` has only its changes to already tracked files staged, while `explicit` is staged
+    /// in full, untracked files included.
+    async fn stage(
+        &self,
+        tracked: &IndexSet<&Path>,
+        explicit: &IndexSet<&Path>,
+    ) -> Result<(), BumpError<VCS>> {
+        self.repo.add(tracked).await.map_err(BumpError::Add)?;
+        if !explicit.is_empty() {
+            self.repo.add_all(explicit).await.map_err(BumpError::Add)?;
+        }
+        Ok(())
+    }
+
     /// Stage and commit versioned files, and optionally create a VCS tag.
     ///
     /// This will:
@@ -759,7 +775,9 @@ where
     ///
     /// # Arguments
     /// * `configured_files` - Map of file paths to their version change instructions.
-    /// * `additional_files` - Extra file paths to include in the commit (e.g., config file).
+    /// * `additional_files` - Extra paths to include in the commit. Unlike the configured files,
+    ///   these are staged with untracked files included, so a file a hook creates or renames
+    ///   below a listed path is committed too.
     /// * `current_version_serialized` - Previous version string before bump.
     /// * `next_version_serialized` - New version string after bump.
     /// * `ctx` - Context map used to format commit and tag templates.
@@ -787,32 +805,34 @@ where
         // Insertion-ordered: the staged files are logged in this order, and a set
         // whose iteration order varies between runs would make the verbose report
         // differ from one identical invocation to the next.
-        let mut files_to_commit: IndexSet<&Path> = configured_files
-            .keys()
-            .map(PathBuf::as_path)
-            .chain(additional_files.iter().map(std::convert::AsRef::as_ref))
-            .collect();
+        let mut files_to_commit: IndexSet<&Path> =
+            configured_files.keys().map(PathBuf::as_path).collect();
 
         if let Some(ref config_file) = self.config_file {
             // add config file
             files_to_commit.insert(config_file.path());
         }
 
+        // Listing a path in `additional_files` opts in to everything under it, so these are
+        // staged apart from the version files, which only ever have their changes staged.
+        let explicit_paths: IndexSet<&Path> = additional_files
+            .iter()
+            .map(std::convert::AsRef::as_ref)
+            .filter(|path| !files_to_commit.contains(path))
+            .collect();
+
         if self.config.global.commit {
             self.logger
                 .log(Verbosity::Low, &format!("{}", "[commit]".magenta()));
 
-            for path in &files_to_commit {
+            for path in files_to_commit.iter().chain(&explicit_paths) {
                 self.logger.log(
                     Verbosity::Low,
                     &format!("\t{} {}", "   add".dimmed(), path.to_string_lossy().cyan()),
                 );
             }
             if !self.config.global.dry_run {
-                self.repo
-                    .add(&files_to_commit)
-                    .await
-                    .map_err(BumpError::Add)?;
+                self.stage(&files_to_commit, &explicit_paths).await?;
             }
 
             let commit_message = self.config.global.commit_message.format(ctx, true)?;

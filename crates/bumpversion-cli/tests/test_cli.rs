@@ -657,7 +657,7 @@ fn test_stage_failure_has_recovery_guidance() -> eyre::Result<()> {
         .stderr(predicate::str::contains(
             "error: failed to stage the release files with exit code 128\n  cd ",
         ))
-        .stderr(predicate::str::contains("git add --update"))
+        .stderr(predicate::str::contains("git add -- "))
         .stderr(predicate::str::contains(
             "stderr:\n  fatal: pathspec",
         ))
@@ -1128,5 +1128,194 @@ filename = "VERSION"
         config_content.contains(r#"current_version = "1.2.3""#),
         "Config should not change in dry-run"
     );
+    Ok(())
+}
+
+/// Run `git` in `dir` and return its trimmed stdout.
+fn git_stdout(dir: &Path, args: &[&str]) -> eyre::Result<String> {
+    let output = std::process::Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .output()?;
+    eyre::ensure!(
+        output.status.success(),
+        "failed to run git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(String::from_utf8(output.stdout)?.trim().to_string())
+}
+
+/// A committed repository at `1.2.3` that lists `additional_files` and has a tracked runbook
+/// directory, a tracked `docs/a.md` and `docs/b.md`, and a tracked `notes.txt`.
+fn additional_files_repo(additional_files: &str) -> eyre::Result<tempfile::TempDir> {
+    let temp = tempfile::tempdir()?;
+    let dir = temp.path();
+    fs::write(
+        dir.join(".bumpversion.toml"),
+        format!(
+            indoc! {r#"
+                [tool.bumpversion]
+                current_version = "1.2.3"
+                commit = true
+                additional_files = {}
+
+                [[tool.bumpversion.files]]
+                filename = "VERSION"
+            "#},
+            additional_files
+        ),
+    )?;
+    fs::write(dir.join("VERSION"), "1.2.3\n")?;
+    fs::create_dir_all(dir.join("deployment/runbooks"))?;
+    fs::write(
+        dir.join("deployment/runbooks/unreleased.md"),
+        "# Unreleased\n",
+    )?;
+    fs::create_dir_all(dir.join("docs"))?;
+    fs::write(dir.join("docs/a.md"), "a\n")?;
+    fs::write(dir.join("docs/b.md"), "b\n")?;
+    fs::write(dir.join("notes.txt"), "notes\n")?;
+    git_init(dir)?;
+    git_commit_all(dir)?;
+    Ok(temp)
+}
+
+/// Run `bumpversion patch --allow-dirty` in `dir`.
+fn bump_patch_allow_dirty(dir: &Path) {
+    Command::new(env!("CARGO_BIN_EXE_bumpversion"))
+        .current_dir(dir)
+        .args(["patch", "--allow-dirty"])
+        .assert()
+        .success();
+}
+
+/// The files changed by the latest commit, as `status<TAB>path` lines sorted by path.
+fn release_commit_changes(dir: &Path) -> eyre::Result<Vec<String>> {
+    let out = git_stdout(
+        dir,
+        &["show", "--name-status", "--no-renames", "--format=", "HEAD"],
+    )?;
+    let mut lines: Vec<String> = out.lines().map(str::to_string).collect();
+    lines.sort_by(|a, b| a.split('\t').nth(1).cmp(&b.split('\t').nth(1)));
+    Ok(lines)
+}
+
+/// A file renamed under a listed directory lands in the release commit, with nothing left over.
+#[test]
+fn test_additional_files_commits_rename_under_listed_directory() -> eyre::Result<()> {
+    let temp = additional_files_repo(r#"["deployment/runbooks"]"#)?;
+    let dir = temp.path();
+    fs::rename(
+        dir.join("deployment/runbooks/unreleased.md"),
+        dir.join("deployment/runbooks/v1.2.4.md"),
+    )?;
+
+    bump_patch_allow_dirty(dir);
+
+    assert_eq!(
+        release_commit_changes(dir)?,
+        [
+            "M\t.bumpversion.toml",
+            "M\tVERSION",
+            "D\tdeployment/runbooks/unreleased.md",
+            "A\tdeployment/runbooks/v1.2.4.md",
+        ]
+    );
+    assert_eq!(git_stdout(dir, &["status", "--short"])?, "");
+    Ok(())
+}
+
+/// A new untracked file below a listed directory is committed, and so is a stray one: listing a
+/// directory opts in to everything under it.
+#[test]
+fn test_additional_files_commits_untracked_files_under_listed_directory() -> eyre::Result<()> {
+    let temp = additional_files_repo(r#"["deployment/runbooks"]"#)?;
+    let dir = temp.path();
+    fs::create_dir_all(dir.join("deployment/runbooks/nested"))?;
+    fs::write(dir.join("deployment/runbooks/nested/new.md"), "new\n")?;
+    fs::write(dir.join("deployment/runbooks/stray.tmp"), "stray\n")?;
+    fs::write(dir.join("untracked-elsewhere.txt"), "elsewhere\n")?;
+
+    bump_patch_allow_dirty(dir);
+
+    assert_eq!(
+        release_commit_changes(dir)?,
+        [
+            "M\t.bumpversion.toml",
+            "M\tVERSION",
+            "A\tdeployment/runbooks/nested/new.md",
+            "A\tdeployment/runbooks/stray.tmp",
+        ]
+    );
+    // Paths outside the listed ones stay untouched.
+    assert_eq!(
+        git_stdout(dir, &["status", "--short"])?,
+        "?? untracked-elsewhere.txt"
+    );
+    Ok(())
+}
+
+/// A listed tracked file that was modified is committed, while an unlisted modified file is not.
+#[test]
+fn test_additional_files_commits_modified_tracked_file() -> eyre::Result<()> {
+    let temp = additional_files_repo(r#"["notes.txt"]"#)?;
+    let dir = temp.path();
+    fs::write(dir.join("notes.txt"), "changed\n")?;
+    fs::write(dir.join("docs/a.md"), "changed\n")?;
+
+    bump_patch_allow_dirty(dir);
+
+    assert_eq!(
+        release_commit_changes(dir)?,
+        ["M\t.bumpversion.toml", "M\tVERSION", "M\tnotes.txt"]
+    );
+    assert_eq!(git_stdout(dir, &["status", "--short"])?, "M docs/a.md");
+    Ok(())
+}
+
+/// A listed tracked file that a hook deleted is committed as a deletion.
+#[test]
+fn test_additional_files_commits_deleted_tracked_file() -> eyre::Result<()> {
+    let temp = additional_files_repo(r#"["notes.txt", "deployment/runbooks"]"#)?;
+    let dir = temp.path();
+    fs::remove_file(dir.join("notes.txt"))?;
+    fs::remove_file(dir.join("deployment/runbooks/unreleased.md"))?;
+
+    bump_patch_allow_dirty(dir);
+
+    assert_eq!(
+        release_commit_changes(dir)?,
+        [
+            "M\t.bumpversion.toml",
+            "M\tVERSION",
+            "D\tdeployment/runbooks/unreleased.md",
+            "D\tnotes.txt",
+        ]
+    );
+    assert_eq!(git_stdout(dir, &["status", "--short"])?, "");
+    Ok(())
+}
+
+/// A glob entry expands to its matches, including new files in a matched directory.
+#[test]
+fn test_additional_files_glob_commits_new_and_modified_files() -> eyre::Result<()> {
+    let temp = additional_files_repo(r#"["docs/*.md"]"#)?;
+    let dir = temp.path();
+    fs::write(dir.join("docs/a.md"), "changed\n")?;
+    fs::write(dir.join("docs/c.md"), "new\n")?;
+    fs::write(dir.join("docs/skip.txt"), "skip\n")?;
+
+    bump_patch_allow_dirty(dir);
+
+    assert_eq!(
+        release_commit_changes(dir)?,
+        [
+            "M\t.bumpversion.toml",
+            "M\tVERSION",
+            "M\tdocs/a.md",
+            "A\tdocs/c.md",
+        ]
+    );
+    assert_eq!(git_stdout(dir, &["status", "--short"])?, "?? docs/skip.txt");
     Ok(())
 }

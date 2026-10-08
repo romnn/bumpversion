@@ -68,10 +68,23 @@ pub trait VersionControlSystem {
     /// Return the root path of the repository.
     fn path(&self) -> &Path;
 
-    /// Stage a set of files for commit.
+    /// Stage changes to files the repository already tracks.
+    ///
+    /// Untracked files are never staged.
     fn add<P>(
         &self,
         files: impl IntoIterator<Item = P>,
+    ) -> impl Future<Output = Result<(), Self::Error>>
+    where
+        P: AsRef<std::ffi::OsStr>;
+
+    /// Stage every change at the given paths, including untracked files.
+    ///
+    /// A directory is staged recursively, so new, renamed, and deleted files below it are all
+    /// included.
+    fn add_all<P>(
+        &self,
+        paths: impl IntoIterator<Item = P>,
     ) -> impl Future<Output = Result<(), Self::Error>>
     where
         P: AsRef<std::ffi::OsStr>;

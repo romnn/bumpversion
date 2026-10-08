@@ -96,7 +96,7 @@ Per-file, `ignore_missing_file` (singular) is accepted as well.
 
 ## Extra files in the commit
 
-`additional_files` lists paths that should be **staged with the release commit but not rewritten**. The usual case is a file a [hook]({{< relref "hooks.md" >}}) regenerates — a lockfile, or a changelog whose heading a script rewrites:
+`additional_files` lists paths that should be **staged with the release commit but not rewritten**, whether or not git tracks them yet. The usual case is a file a [hook]({{< relref "hooks.md" >}}) regenerates — a lockfile, or a changelog whose heading a script rewrites:
 
 ```toml
 additional_files = ["Cargo.lock", "CHANGELOG.md"]
@@ -108,7 +108,11 @@ An entry may be a glob pattern, and a match may be a directory, which is staged 
 additional_files = ["Cargo.lock", "docs/examples/*/generated"]
 ```
 
-Patterns are resolved against the repository root before git sees them, so `docs/examples/*/generated` reaches the files inside each directory. A pattern that matches nothing is skipped with a warning. A plain path with no wildcard is handed to git as is, and git reports it if the file does not exist.
+Patterns are resolved against the repository root before git sees them, so `docs/examples/*/generated` reaches the files inside each directory. A pattern that matches nothing is skipped with a warning. A plain path with no wildcard is handed to git as is, and git reports it if the file neither exists nor is tracked.
+
+Listing a path is an explicit opt-in to **everything under it**. Each entry is staged with `git add`, so a modified file, a deleted file, and a file that is new or renamed since the last commit are all committed. A hook can therefore rename `deployment/runbooks/unreleased.md` to `v1.2.4.md` and have both sides of the rename land in the release commit. This also means any stray untracked file under a listed directory, such as an editor backup or a scratch file, is committed with it. List a narrower path or a glob to avoid that. Files outside the listed paths are never staged, and ignored files are skipped.
+
+The files from your `[[files]]` entries and the config file are different: only their changes to files git already tracks are staged.
 
 Without this, a hook's changes would be left uncommitted in the working tree after the release commit. For a Rust project, [Cargo.lock in the release commit]({{< relref "hooks.md" >}}#rust-keeping-cargolock-in-the-release-commit) shows the whole pattern — the hook that refreshes the lockfile and the entry that stages it.
 

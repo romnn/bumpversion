@@ -348,6 +348,17 @@ impl VersionControlSystem for GitRepository {
         Ok(())
     }
 
+    async fn add_all<P>(&self, paths: impl IntoIterator<Item = P>) -> Result<(), Error>
+    where
+        P: AsRef<std::ffi::OsStr>,
+    {
+        // `--` keeps a path that starts with a dash from being read as an option.
+        let mut cmd = Command::new("git");
+        cmd.args(["add", "--"]).args(paths).current_dir(&self.path);
+        let _add_output = run_command(&mut cmd).await?;
+        Ok(())
+    }
+
     async fn dirty_files(&self) -> Result<Vec<PathBuf>, Error> {
         let mut cmd = Command::new("git");
         cmd.args(["status", "-u", "--porcelain"])
