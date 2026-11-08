@@ -125,6 +125,6 @@ mod tests {
     #[test]
     fn handles_argv_without_arguments() {
         assert_eq!(normalize(&["cargo-bumpversion"]), ["cargo-bumpversion"]);
-        assert!(normalize(&[]).is_empty());
+        assert_eq!(normalize(&[]), Vec::<String>::new());
     }
 }
